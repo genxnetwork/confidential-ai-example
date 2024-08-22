@@ -11,5 +11,7 @@ Python 3.12.3
 
 Put token into ~/.confido/trs.token 
 
+```console
 pip install confido-0.0.1-cp312-cp312-manylinux_2_34_x86_64.whl
 python3 atls-example.py
+```
