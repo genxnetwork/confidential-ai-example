@@ -14,6 +14,7 @@ password = '00be83b3ae30a8677ba798af4406187f077852d6'
 http_client = httpx.Client(verify=context, auth=(username, password))
 
 client = openai.OpenAI(
+    api_key="null",
     base_url="https://api.genxt.ai/v1",
     http_client=http_client,
 )
