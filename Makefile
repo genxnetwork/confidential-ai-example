@@ -15,8 +15,8 @@ clean:
 cli:
 	docker run --platform linux/amd64 --hostname genxt-confidential-ai -it confidential-ai-example /bin/bash
 
-promt:
-	docker run --platform linux/amd64 -it confidential-ai-example python3 confai-promter.py $(ARGS)
+chat:
+	docker run --platform linux/amd64 -it confidential-ai-example python3 confai-promter.py
 
 %:
 	@true
