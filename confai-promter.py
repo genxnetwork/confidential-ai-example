@@ -9,7 +9,6 @@ def setup_client():
     # Set up aTLS connection
     confido.atls_debug()
     atls_cert = confido.aTLS_connect_py("http://api.genxt.ai:9000")
-    print("aTLS Certificate established")
     
     # Configure SSL context
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
@@ -43,7 +42,7 @@ def chat_loop(client):
     
     while True:
         # Get user input
-        user_input = input("\nYou: ").strip()
+        user_input = input("\nYou > ").strip()
         
         # Check for exit commands
         if user_input.lower() in ['exit', 'quit']:
