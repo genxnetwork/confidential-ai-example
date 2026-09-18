@@ -1,19 +1,29 @@
 import confido
-import ssl
 import httpx
+import ssl
 import openai
-import argparse
 
-def setup_client():
+TRS_REGISTRY = "genxnetwork/confido-trusted-repository"
+TRS_SOURCE = f"https://github.com/{TRS_REGISTRY}"
+
+ENDPOINTS = {
+    # Expected to pass attestation and PCR verification.
+    "match": "match.demo.genxt.network",
+    # Negative test endpoint: its attestation should fail verification.
+    "mismatch": "mismatch.demo.genxt.network",
+}
+
+def setup_client(endpoint):
     """Initialize and return the OpenAI client with proper configuration"""
+    hostname = ENDPOINTS[endpoint]
     # Set up aTLS connection
     confido.atls_debug()
-    atls_cert = confido.aTLS_connect_py("http://api.genxt.ai:9000")
+    atls_cert = confido.aTLS_connect_py(f"http://{hostname}:8000", TRS_REGISTRY)
     
     # Configure SSL context
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     context.verify_mode = ssl.CERT_REQUIRED
-    context.check_hostname = True
+    context.check_hostname = False
     context.load_verify_locations(cadata=atls_cert)
     
     # Set up HTTP client with authentication
@@ -24,7 +34,7 @@ def setup_client():
     # Initialize OpenAI client
     return openai.OpenAI(
         api_key="null",
-        base_url="https://api.genxt.ai/v1",
+        base_url=f"https://{hostname}/v1",
         http_client=http_client,
     )
 
@@ -61,7 +71,7 @@ def chat_loop(client):
         try:
             # Get completion from the model
             completion = client.chat.completions.create(
-                model="llama2-uncensored:70b",
+                model="llama-default",
                 messages=conversation
             )
             
@@ -77,9 +87,21 @@ def chat_loop(client):
             print("Please try again.")
 
 def main():
+    print("\nConfido attestation chat demo")
+    print("Before chat starts, Confido verifies the server's TEE evidence, PCRs, and IMA measurements.")
+    print(f"Trusted measurement source: {TRS_SOURCE}")
+    print("\nChoose an endpoint to attest:")
+    print("1. match.demo.genxt.network - expected successful verification")
+    print("2. mismatch.demo.genxt.network - expected verification failure")
+    choice = input("\nEndpoint [1]: ").strip() or "1"
+    endpoint = {"1": "match", "2": "mismatch"}.get(choice)
+    if endpoint is None:
+        print("Invalid endpoint choice")
+        return
+
     try:
         # Initialize the client
-        client = setup_client()
+        client = setup_client(endpoint)
         
         # Start the chat loop
         chat_loop(client)
