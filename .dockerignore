@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!requirements.lock
+!confai-promter.py
+!profiles/
+!profiles/*.json
+!scripts/
+!scripts/*.py
+!build/
+!build/wheels/
+!build/wheels/*.whl
+!build/wheel.sha256

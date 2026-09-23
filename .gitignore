@@ -167,3 +167,5 @@ cython_debug/
 
 # Local application credentials
 .credentials.json
+build/
+build-manifest.json

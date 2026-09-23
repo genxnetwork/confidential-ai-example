@@ -1,39 +1,26 @@
-"""Show which Confido checkout supplies the development Python environment."""
-
+"""Show installed wheel provenance and verify it against the local built artifact."""
+import hashlib
 import importlib.metadata
 import json
 from pathlib import Path
 import sys
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlparse
+import confido
 
-
-def main() -> None:
-    expected = Path(sys.argv[1]).resolve()
-    try:
-        distribution = importlib.metadata.distribution("confido-atls")
-        import confido  # noqa: F401 - also check that the extension can be imported
-    except (importlib.metadata.PackageNotFoundError, ImportError) as error:
-        raise SystemExit(f"Confido is unavailable in this environment: {error}\nRun make dev-update.")
-
-    try:
-        provenance = json.loads(distribution.read_text("direct_url.json") or "{}")
-        url = urlsplit(provenance.get("url", ""))
-        source = Path(unquote(url.path)).resolve() if url.scheme == "file" else None
-    except (ValueError, TypeError):
-        source = None
-
-    if source != expected:
-        raise SystemExit(
-            f"Confido is not installed from {expected}.\n"
-            f"Installed source: {source or 'unknown (possibly PyPI)'}\n"
-            "Run make dev-update."
-        )
-
-    print("Confido development install: OK")
-    print(f"  Version: {distribution.version}")
-    print(f"  Local source: {source}")
-    print(f"  Python environment: {sys.prefix}")
-
-
-if __name__ == "__main__":
-    main()
+root=Path(__file__).resolve().parents[1]
+dist=importlib.metadata.distribution('confido-atls')
+info=json.loads(dist.read_text('direct_url.json') or '{}')
+source=Path(unquote(urlparse(info.get('url','')).path))
+if getattr(confido,'__version__',None)!='0.3.0':
+    raise SystemExit('Stale Confido wheel; run make dev-update')
+expected=root/'build/wheels'/source.name
+if not expected.is_file():
+    raise SystemExit('Local wheel artifact not found; run make dev-update')
+digest=hashlib.sha256(expected.read_bytes()).hexdigest()
+recorded=info.get('archive_info',{}).get('hashes',{}).get('sha256')
+if recorded!=digest:
+    raise SystemExit('Installed wheel differs from build/wheels; run make dev-update')
+print('Confido:',confido.__version__)
+print('Installed from:',source)
+print('Wheel SHA-256:',digest)
+print('Rust source:',Path(sys.argv[1]).resolve() if len(sys.argv)>1 else 'see build manifest')

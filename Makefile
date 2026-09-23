@@ -1,49 +1,45 @@
-.PHONY: all
-all: build run
-
-ARGS = $(filter-out $@,$(MAKECMDGOALS))
-
-build:
-	docker build --platform=linux/amd64 -t confidential-ai-example .
-
-rebuild:
-	docker build --platform=linux/amd64 --no-cache -t confidential-ai-example .
-
-clean:
-	docker rmi confidential-ai-example --force
-
-cli:
-	docker run --platform linux/amd64 --hostname genxt-confidential-ai -it confidential-ai-example /bin/bash
-
-chat:
-	docker run --platform linux/amd64 -it confidential-ai-example python3 confai-promter.py
-
-%:
-	@true
-
-# Local development uses the sibling Confido checkout and an isolated Python environment.
 PYTHON ?= python3
 VENV ?= .venv
 CONFIDO_LIB ?= ../confido/lib
-MATURIN ?= $(VENV)/bin/maturin
+MATURIN ?= $(abspath $(VENV))/bin/maturin
+DOCKER ?= docker
+IMAGE ?= confidential-ai-example:0.3.0
 
-.PHONY: dev-setup dev-update dev-chat dev-info
-
+.PHONY: dev-setup dev-update dev-chat dev-info wheel build chat test
 $(VENV)/bin/pip:
 	$(PYTHON) -m venv $(VENV)
 
 dev-setup: $(VENV)/bin/pip
-	$(VENV)/bin/python -m pip install 'maturin>=1.6,<2' httpx openai
+	$(VENV)/bin/python -m pip install 'maturin==1.15.0' 'patchelf==0.17.2.4'
+	$(VENV)/bin/python -m pip install --require-hashes -r requirements.lock
 	$(MAKE) dev-update
 
-dev-update: $(VENV)/bin/pip
-	@test -f "$(CONFIDO_LIB)/Cargo.toml" || { echo "Confido checkout not found at $(CONFIDO_LIB); set CONFIDO_LIB=/path/to/confido/lib" >&2; exit 1; }
-	@test -x "$(MATURIN)" || { echo "maturin not found at $(MATURIN); run make dev-setup or set MATURIN=/path/to/maturin" >&2; exit 1; }
-	VIRTUAL_ENV="$(abspath $(VENV))" "$(MATURIN)" develop --release --manifest-path "$(abspath $(CONFIDO_LIB))/Cargo.toml"
-	@$(MAKE) --no-print-directory dev-info
+$(VENV)/bin/maturin: $(VENV)/bin/pip
+	$(VENV)/bin/python -m pip install 'maturin==1.15.0' 'patchelf==0.17.2.4'
 
-dev-info: $(VENV)/bin/pip
-	@$(VENV)/bin/python scripts/dev_info.py "$(abspath $(CONFIDO_LIB))"
+wheel: $(VENV)/bin/maturin
+	$(MAKE) -C $(CONFIDO_LIB) wheel MATURIN=$(MATURIN) PYTHON=$(abspath $(VENV))/bin/python
+	mkdir -p build/wheels
+	rm -f build/wheels/confido_atls-*.whl
+	cp $(CONFIDO_LIB)/target/wheels/confido_atls-0.3.0-*.whl build/wheels/
+	cd build/wheels && sha256sum confido_atls-0.3.0-*.whl > ../wheel.sha256
 
-dev-chat: $(VENV)/bin/pip
+dev-update: wheel
+	$(VENV)/bin/python -m pip install --force-reinstall --no-index --no-deps build/wheels/confido_atls-0.3.0-*.whl
+	$(MAKE) dev-info
+
+dev-info:
+	$(VENV)/bin/python scripts/dev_info.py $(abspath $(CONFIDO_LIB))
+
+dev-chat:
 	$(VENV)/bin/python confai-promter.py
+
+build: dev-update
+	$(DOCKER) build --platform linux/amd64 -t $(IMAGE) .
+	$(VENV)/bin/python scripts/build_manifest.py $(DOCKER)
+
+chat:
+	$(DOCKER) run --rm --platform linux/amd64 -it --env CONFIDO_USERNAME --env CONFIDO_PASSWORD $(IMAGE)
+
+test:
+	$(VENV)/bin/python -m unittest discover -s tests -v
