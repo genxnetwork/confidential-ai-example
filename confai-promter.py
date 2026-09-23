@@ -1,130 +1,125 @@
+"""Point-in-time evidence appraisal before a cooperating client opens chat."""
 import confido
 import os
 from pathlib import Path
 import json
 import httpx
-import ssl
 import openai
+import uuid
+from datetime import datetime, timezone
 
-TRS_REGISTRY = "genxnetwork/confido-trusted-repository"
-TRS_SOURCE = f"https://github.com/{TRS_REGISTRY}"
-
-ENDPOINTS = {
-    # Expected to pass attestation and PCR verification.
-    "match": "match.demo.genxt.network",
-    # Negative test endpoint: its attestation should fail verification.
-    "mismatch": "mismatch.demo.genxt.network",
-}
-
-def get_service_info(hostname, verify):
-    """Fetch only public metadata; the caller decides whether it is trusted."""
-    with httpx.Client(verify=verify, follow_redirects=False, timeout=10.0) as client:
-        response = client.get(f"https://{hostname}/service-info")
-        response.raise_for_status()
-        service_info = response.json()
-    if not isinstance(service_info, dict):
-        raise ValueError("/service-info did not return a JSON object")
-    return service_info
+POLICY_DIR = Path(os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles")))
+ENDPOINTS = {"match": "match.demo.genxt.network", "mismatch": "mismatch.demo.genxt.network"}
 
 
-def setup_client(endpoint):
-    """Show metadata, request consent, then attest before opening chat."""
-    hostname = ENDPOINTS[endpoint]
+def load_policy(endpoint):
+    return json.loads((POLICY_DIR / f"{endpoint}.json").read_text())
 
-    # This first request uses the demo's self-signed certificate without a
-    # trust anchor. Its content is displayed only and never used for trust.
-    preview = get_service_info(hostname, verify=False)
-    print("\n" + "=" * 68)
-    print(f"SERVICE INFO  |  {hostname}")
-    print("=" * 68)
-    print("Unverified preview: the HTTPS certificate has not been authenticated yet.")
-    print("Treat these fields as display-only until TEE appraisal succeeds.\n")
-    print(json.dumps(preview, indent=2, ensure_ascii=False))
 
-    advertisement = preview.get("teeReport")
-    nonce = advertisement.get("nonce") if isinstance(advertisement, dict) else None
-    fields = advertisement.get("response") if isinstance(advertisement, dict) else None
-    binding = advertisement.get("sessionBinding") if isinstance(advertisement, dict) else None
-    supported = (
-        isinstance(advertisement, dict)
-        and advertisement.get("endpoint") == "/tee-report"
-        and advertisement.get("method") == "POST"
-        and isinstance(nonce, dict)
-        and nonce.get("name") == "nonce"
-        and nonce.get("in") == "body"
-        and nonce.get("encoding") == "base64"
-        and nonce.get("sizeBytes") == 32
-        and isinstance(fields, dict)
-        and fields.get("evidenceField") == "evidence"
-        and fields.get("certificateField") == "certificate"
-        and (binding is None or (isinstance(binding, dict) and binding.get("supported") is False))
-    )
-    if not supported:
-        print("\nTEE report advertisement is missing or incompatible with this client.")
-        print("Expected: POST /tee-report with a 32-byte base64 nonce in JSON.")
-        print(f"Advertised: {json.dumps(advertisement, sort_keys=True)}")
-        print("Chat was not opened.")
-        return None
+def reference_link(policy):
+    ref = policy["reference"]
+    return f'https://github.com/{ref["repository"]}/blob/{ref["commit"]}/{ref["path"]}'
 
-    print("\nTEE attestation report is available (advertised; not yet verified).")
-    print(f"  Report: POST https://{hostname}/tee-report")
-    print('  Body: {"nonce": "<fresh 32-byte base64 nonce>"}')
-    print(f"  TRS configured: {TRS_SOURCE}")
-    print("  TLS session binding: NOT SUPPORTED.")
-    print("  The report is nonce- and certificate-bound, but not bound to this TLS session.")
-    print("  IETF SEAT is drafting attestation-to-TLS binding:")
-    print("  https://datatracker.ietf.org/wg/seat/documents/")
-    print("  Exported Authenticators (RFC 9261) in BoringSSL are ongoing")
-    print("  implementation work; session binding is not active in this demo.")
-    print("  Appraisal: nonce, certificate binding, TEE evidence, PCRs, and IMA.")
-    answer = input("\nRetrieve and appraise the report before chat? [Y/n]: ").strip().lower()
-    if answer not in ("", "y", "yes"):
-        print("Attestation skipped. Chat was not opened.")
-        return None
 
-    print("\nRetrieving a fresh TEE report and appraising it against the TRS...")
-    # Keep Confido's detailed attestation trace visible after user confirmation.
-    confido.atls_debug()
-    try:
-        # Confido generates a fresh nonce and verifies the returned evidence.
-        atls_cert = confido.aTLS_connect_py(f"https://{hostname}", TRS_REGISTRY)
-    except Exception as exc:
-        print(f"TEE appraisal: FAILED — {exc}")
-        print("Chat was not opened.")
-        return None
+class AppraisedTransport(httpx.BaseTransport):
+    """All requests pass through Confido's private, origin-scoped HTTPS client."""
+    def __init__(self, session):
+        self.session = session
 
-    print("TEE appraisal: PASSED — TEE report and bound vTPM quote verified.")
-    print("TEE–vTPM trust chain: confirmed.")
-    print("  The vTPM attestation public key was extracted from the TEE report")
-    print("  and used to verify the signed vTPM quote.")
-    print("Execution environment: verified against the trusted manifest in the configured TRS.")
-    print("Server certificate: bound to the verified TEE report.")
+    def handle_request(self, request):
+        status, headers, body = self.session.request(
+            request.method, str(request.url), list(request.headers.multi_items()), request.read()
+        )
+        return httpx.Response(status, headers=headers, content=body, request=request)
 
-    # Trust only the certificate bound into the verified report.
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
-    context.load_verify_locations(cadata=atls_cert)
 
-    verified_info = get_service_info(hostname, verify=context)
-    if verified_info == preview:
-        print("Service info: matches the preview when fetched with the verified certificate.")
-    else:
-        print("Service info: preview differed. Response fetched with the verified certificate:")
-        print(json.dumps(verified_info, indent=2, ensure_ascii=False))
-
-    print("Opening chat over HTTPS with the certificate bound to the verified report.\n")
-    credential_file = Path(os.environ.get("CONFIDO_CREDENTIALS_FILE", Path(__file__).with_name(".credentials.json")))
-    credentials = json.loads(credential_file.read_text()) if credential_file.exists() else {}
+def read_credentials():
+    path = Path(os.environ.get("CONFIDO_CREDENTIALS_FILE", Path(__file__).with_name(".credentials.json")))
+    credentials = json.loads(path.read_text()) if path.exists() else {}
     username = os.environ.get("CONFIDO_USERNAME") or credentials.get("username")
     password = os.environ.get("CONFIDO_PASSWORD") or credentials.get("password")
     if not username or not password:
         raise ValueError("Set CONFIDO_USERNAME/CONFIDO_PASSWORD or provide a local .credentials.json file")
-    http_client = httpx.Client(verify=context, auth=(username, password))
-    return openai.OpenAI(
-        api_key="null",
-        base_url=f"https://{hostname}/v1",
-        http_client=http_client,
-    )
+    return username, password
+
+
+def new_bundle_path(endpoint):
+    root = Path(os.environ.get("CONFIDO_RUN_DIR", Path.home() / ".local/state/confido/runs"))
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    run = root / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8])
+    run.mkdir(mode=0o700)
+    return run / f"{endpoint}.json"
+
+
+def show_result(result):
+    print("\nAPPRAISAL STAGES")
+    print("-" * 68)
+    for check in result["checks"]:
+        print(f'  {check["status"].upper():6}  {check["stage"]}: {check["detail"]}')
+    print(f'\nDecision: {result["status"].upper()} ({result["reason"]})')
+    print(f'IMA coverage: {result["coverage"]["ima_entries"]} enrolled entries; boot aggregate and kernel modules.')
+    print("Application/model files and GPU state are outside this measurement coverage.")
+
+
+def setup_client(endpoint):
+    """No application credentials are read until all required stages pass."""
+    if getattr(confido, "__version__", None) != "0.3.0":
+        raise RuntimeError("This demo requires the local Confido 0.3.0 wheel; run make dev-update")
+    policy = load_policy(endpoint)
+    config_json = json.dumps(policy)
+    preview = json.loads(confido.discover_py(config_json))
+    print("\n" + "=" * 68)
+    print(f'SERVICE INFO  |  {policy["origin"]}')
+    print("=" * 68)
+    print("Bootstrap preview: the HTTPS peer has not been authenticated yet.")
+    print("These fields are display-only until appraisal and HTTPS authentication pass.\n")
+    print(json.dumps(preview, indent=2, ensure_ascii=True))
+    ad = preview.get("teeReport", {})
+    if ad.get("profile") != "azure-snp-vtpm-ima/1" or ad.get("wireVersion") != 1:
+        print("\nTEE report advertisement is incompatible: profile/version upgrade required.")
+        print("Chat was not opened.")
+        return None
+    print("\nTEE attestation report is available (advertised; not yet verified).")
+    print(f'  Report: POST {policy["origin"]}/tee-report')
+    print(f'  TRS configured: {reference_link(policy)}')
+    print(f'  Reference SHA-256: {policy["reference"]["sha256"]}')
+    print("  TLS session binding: NOT SUPPORTED.")
+    print("  A fresh vTPM quote binds the nonce, certificate and IMA log.")
+    print("  The SNP report is not necessarily regenerated for this request.")
+    print("  RFC 9261 standardizes Exported Authenticators; IETF SEAT attestation")
+    print("  integration remains draft work. BoringSSL integration is planned here.")
+    print("  https://www.rfc-editor.org/rfc/rfc9261.html")
+    print("  https://datatracker.ietf.org/wg/seat/documents/")
+    answer = input("\nRetrieve and appraise the report before chat? [Y/n]: ").strip().lower()
+    if answer not in ("", "y", "yes"):
+        print("Appraisal skipped. Chat was not opened.")
+        return None
+
+    print("\nCollecting evidence and a fresh vTPM quote; appraising against the pinned reference...")
+    confido.atls_debug()
+    bundle_path = new_bundle_path(endpoint)
+    session = confido.connect_py(config_json, json.dumps(preview), str(bundle_path))
+    result = json.loads(session.result_json)
+    show_result(result)
+    print(f"Run record: {bundle_path.with_suffix('.result.json')}")
+    if not result["application_admitted"]:
+        print("Chat was not opened. No application request or credential was sent.")
+        return None
+
+    print("\nTEE report and bound vTPM quote: VERIFIED.")
+    print("  The vTPM public key was extracted from SNP-authenticated HCL metadata")
+    print("  and verified the quote signature: TEE → HCL → vTPM trust chain confirmed.")
+    print("Measured boot and IMA state: matches the configured trusted reference.")
+    print("HTTPS peer: authenticated using the certificate bound into the quote.")
+    print("Service info: critical identity and report fields match the preview.")
+    print("Inference: llama-default forwards to Azure-hosted inference outside this VM's appraisal boundary.")
+    print("Opening chat after successful environment appraisal and HTTPS authentication.\n")
+    # Read secrets only after Confido exposes the admitted session.
+    credentials = read_credentials()
+    http_client = httpx.Client(transport=AppraisedTransport(session), auth=credentials,
+                              follow_redirects=False, timeout=30.0)
+    return openai.OpenAI(api_key="null", base_url=f'{policy["origin"]}/v1',
+                         http_client=http_client, max_retries=0)
 
 def chat_loop(client):
     """Run a chat session, then return to endpoint selection."""
@@ -178,46 +173,36 @@ def chat_loop(client):
             print("Please try again.")
 
 def main():
-    print("\nConfido attestation chat demo")
-    print("Before chat starts, Confido verifies the server's TEE evidence, vTPM PCRs, and IMA log.")
+    print("\nConfido evidence-appraisal chat demo")
+    print("Before chat, Confido verifies TEE/HCL evidence, a fresh vTPM quote, PCRs and the IMA log.")
     print()
     print("TEE  = Trusted Execution Environment")
     print("TPM  = Trusted Platform Module (vTPM: virtual TPM); PCR = Platform Configuration Register")
     print("IMA  = Integrity Measurement Architecture")
-    print(f"\nTrusted measurement source: {TRS_SOURCE}")
-
     while True:
-        print("\nChoose an attestable endpoint to connect:")
-        print("1. match.demo.genxt.network - expected successful verification")
-        print("2. mismatch.demo.genxt.network - expected verification failure")
+        print("\n1. match.demo.genxt.network — expected reference match")
+        print("2. mismatch.demo.genxt.network — expected reference mismatch")
         print("0. Exit")
         choice = input("\nEndpoint [1]: ").strip() or "1"
-
         if choice == "0":
-            print("\nGoodbye!")
             return
-
         endpoint = {"1": "match", "2": "mismatch"}.get(choice)
         if endpoint is None:
-            print("Invalid endpoint choice. Please choose 0, 1, or 2.")
+            print("Choose 0, 1 or 2.")
             continue
-
         try:
             client = setup_client(endpoint)
-        except Exception as e:
-            print(f"\nConnection or verification failed: {e}")
-            continue
+            if client is not None:
+                try:
+                    chat_loop(client)
+                finally:
+                    client.close()
+        except Exception as exc:
+            print(f"\nRequest withheld: {exc}")
 
-        if client is None:
-            continue
-
-        try:
-            chat_loop(client)
-        finally:
-            client.close()
 
 if __name__ == "__main__":
     try:
         main()
     except (EOFError, KeyboardInterrupt):
-        print("\nGoodbye!")
+        print("\nGoodbye.")

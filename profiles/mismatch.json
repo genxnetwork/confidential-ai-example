@@ -1,0 +1,22 @@
+{
+  "origin": "https://mismatch.demo.genxt.network",
+  "service_id": "attestation-mismatch.genxt.demo-chat",
+  "profile": "azure-snp-vtpm-ima/1",
+  "reference": {
+    "repository": "genxnetwork/confido-trusted-repository",
+    "commit": "5a591c8ce52c379a5b64f98e45243a5ea5d529e9",
+    "path": "bb-attest-172.201.106.172.json",
+    "sha256": "c8fe1e57c55d0e1cfbc51c8615a09e56be168dade6f00ef652d98ba0a85c3db7"
+  },
+  "platform": {
+    "product": "Milan",
+    "ark_sha256": "69d063b45344d26a2e94e1f4210de49ef555308287d4c174445c95639a540bcd",
+    "minimum_tcb": [
+      4,
+      0,
+      24,
+      219
+    ],
+    "launch_measurement": "5b0ce64ad1c1f6375dbda5f760b98526ca1bcf91b8195091afc28e7b024251d68fe32e05af34048d6607678cd23283ff"
+  }
+}

@@ -1,80 +1,65 @@
 # Confidential AI Example
 
-The client discovers `POST /tee-report` from `GET https://<host>/service-info`, sends a fresh nonce in JSON, verifies the returned certificate with Confido, and then opens the chat connection on the same HTTPS host. The service advertises `teeReport.sessionBinding.supported: false`: the report is nonce- and certificate-bound, but it is not cryptographically bound to the current TLS session. The console explains this limitation after showing the TRS link. The public `/aTLS` endpoint is no longer used. The console first displays service metadata as an unverified preview, shows the TEE report advertisement and configured TRS link, and prompts before report retrieval and appraisal (Enter accepts). Chat opens only after verification passes.
+A chat client demonstrating **execution-environment evidence appraisal before application use**. It compares measured state with an immutable, verifier-configured reference and either opens chat or withholds the request. Both endpoints use the same verification path:
 
-This repository contains a Dockerized client application for a Confidential AI/LLM Service example. This `confai-promter.py` app leverages the `Attested-TLS` protocol, implemented in the GENXT `confido` library. The confido library is a confdential computing middleware that serves as a specialised TLS certificate handler that, using a chain of cryptographically interlinked messages, verifies the authenticity and integrity of the entire software stack of the remote VM running the inference engine. It also independently verifies the CPU-signed evidence of the VM’s memory isolation. Within the Attested-TLS protocol, the CPU implementation is the only explicit trust anchor expected by the user.
+- **match:** the enrolled boot/IMA state should match the configured reference;
+- **mismatch:** an intentionally incompatible reference should be rejected.
 
-The Docker image installs `confido-atls==0.2.0` from PyPI. This example has no
-direct `azure-cvm-tooling` import; Confido 0.2.0 uses the pinned original
-[Kinvolk azure-cvm-tooling repository](https://github.com/kinvolk/azure-cvm-tooling).
-Build the image after Confido 0.2.0 has been published to PyPI.
+## Background and discussion
 
-## Local development
+This example is the chat demonstrator discussed in [BioHackCloud issue #17 — “demo: Private LLM Chat through Attested-TLS (Confidential Computing)”](https://github.com/elixir-cloud-aai/biohackcloud-issues/issues/17). The issue introduces the aTLS verification flow to ELIXIR BioHackathon participants, invites feedback, and discusses a possible optional GA4GH-SDK/CLI extension. It provides the original demonstration context and discussion; the protocol, build instructions and assurance scope for this revision are documented below. GA4GH-SDK integration remains prospective.
 
-With `confido` and `confidential-ai-example` checked out side by side, run:
+## What happens before chat
 
-```bash
-make dev-setup   # create .venv, install Python dependencies, build local Confido
-make dev-chat    # run the example with the local Confido build
-```
+1. Fetch and print `GET https://<host>/service-info` as a bootstrap preview. The initial HTTPS certificate is not yet authenticated; metadata cannot choose the trusted policy.
+2. Show the advertised `POST /tee-report` endpoint and exact pinned reference URL/digest.
+3. Explain the supported bindings and request consent: `Retrieve and appraise the report before chat? [Y/n]:` (Enter accepts).
+4. Generate a fresh challenge and verify AMD endorsements/SNP evidence, HCL's vTPM attestation key, quote signature/nonce/certificate/log binding, signed PCR selection, boot aggregate and exact IMA reference.
+5. Print detailed attestation logs and structured stage outcomes. A valid quote with incompatible measurements is reported as a **reference mismatch**.
+6. Authenticate the intended HTTPS peer using the appraised certificate and re-fetch metadata. Changed service identity, API type/version or report contract fails closed.
+7. Only then read application credentials and open an origin-scoped chat client. Redirects, HTTP downgrade and requests to another origin are rejected by Confido's transport.
 
-After changing Confido's Rust code, run `make dev-update` to rebuild and reinstall
-its Python extension in `.venv`, then `make dev-chat` again. `make dev-info`
-confirms that the installed extension came from your local Confido checkout
-and shows its version. The virtual environment is ignored by Git. If the Confido checkout is
-elsewhere, pass `CONFIDO_LIB=/path/to/confido/lib` to `make dev-update` (or
-`make dev-setup`). Local development requires Python 3 with `venv` support (on Ubuntu, install
-`python3-venv`), Rust, and the native Confido build dependencies described in
-the sibling Confido README. `make dev-setup` installs maturin into `.venv`.
+Public discovery, report and chat routes use HTTPS 443; HTTP 80 redirects. `/aTLS` is retired. This revision requires the versioned `azure-snp-vtpm-ima/1` advertisement (`wireVersion: 1`) and Confido **0.3.0**; it rejects older advertisements instead of silently falling back.
 
-Use `make dev-update` followed by `make dev-chat` for this service-info
-migration. The current `make build` / `make chat` Docker path still installs the
-published `confido-atls==0.2.0` wheel, which calls the retired `/aTLS` endpoint.
-It needs a new wheel release before that image can use `/service-info`.
+## What the evidence covers
 
-## Requirements 
+The initial enrolled profile covers a **boot aggregate and kernel modules**, with an enrolled SNP launch measurement and minimum TCB. The vTPM attestation key comes from HCL metadata authenticated by the SNP report; it verifies the quote that binds the challenge, certificate and IMA log. The quote is fresh for the request; the hardware report is not necessarily regenerated.
 
-This example works on any platform and only requires [Docker](https://docs.docker.com/engine/install/) and `make` to be installed.
+Application code/configuration, model files, GPU state and external inference are not covered by this log. In the configured demonstration, `llama-default` forwards to **Azure-hosted inference outside the appraised VM**. Admission is enforced by this cooperating client at a point in time. The server does not require an attestation capability.
 
-## Installing Make
+`teeReport.sessionBinding.supported` is **false**. The quote's certificate binding does not bind a particular TLS connection or establish relay resistance. [RFC 9261 Exported Authenticators](https://www.rfc-editor.org/rfc/rfc9261.html) are standardized; attestation integration is ongoing [IETF SEAT draft work](https://datatracker.ietf.org/wg/seat/documents/). BoringSSL integration is a planned implementation target.
 
-### On Ubuntu/Debian
+See the sibling [Confido assurance profile](../confido/docs/revision/decisions/001-bounded-profile.md) for trust assumptions, precise deployment topology and platform-policy limits. Here “TRS” means the configured trusted reference source; the current GitHub-backed repository is not an implementation of the GA4GH Tool Registry Service API.
 
-You can install `make` on Ubuntu or any other Debian-based system by running the following command in your terminal:
+## Build and run
+
+The frozen demonstration target is Linux x86_64 with CPython 3.10. Keep `confido` and this repository side by side. Native builds require Rust, OpenSSL build prerequisites and TPM2-TSS development libraries listed in Confido's README.
 
 ```bash
-sudo apt-get install make
+make dev-setup
+make dev-chat
 ```
 
-### On CentOS/RHEL
+`make dev-update` rebuilds the local wheel after Rust changes. `make dev-info` reports installed package provenance. No PyPI publication is required.
 
-On CentOS, RHEL, or any other RedHat-based system, you can use the following command:
+For the container path:
 
 ```bash
-sudo yum install make
+make build
+make chat
 ```
 
-### On macOS
+The image consumes the freshly built local 0.3.0 wheel and locked Python dependencies. It never installs the old published 0.2.0 wheel. See `build-manifest.json` generated by the build for wheel/image hashes. Docker on other architectures requires amd64 emulation; only the frozen target is tested.
 
-If you have Homebrew installed, you can install make by running:
+### Operator configuration
 
-```bash
-brew install make
-```
+- `profiles/match.json` and `profiles/mismatch.json` contain verifier-controlled origins, service identities, immutable reference commit/path/digest and platform enrollment. Set `CONFIDO_POLICY_DIR` to a different reviewed policy directory. Do not enroll a reference from an unauthenticated advertisement.
+- Supply credentials through `CONFIDO_USERNAME` / `CONFIDO_PASSWORD`, or an ignored `.credentials.json` file with `username` and `password` keys (`chmod 600`). `CONFIDO_CREDENTIALS_FILE` selects another file. Never commit credentials or bake them into an image.
+- `CONFIDO_RUN_DIR` selects a private evidence directory; default: `~/.local/state/confido/runs`. Bundles/results are created with mode 0600. They contain public attestation material and host measurements, so inspect them before sharing. They contain no application secrets or prompts.
+- Optional `CONFIDO_TRS_TOKEN` is used only for the configured GitHub reference API and is never saved in a bundle.
 
-If you don't have Homebrew, you can install it by following the instructions on the [Homebrew](https://brew.sh/) website.
+## Evidence and reruns
 
-## Usage
+Each accepted appraisal attempt records the challenge, evidence, public AMD endorsements, exact reference bytes and structured decision. Frozen evidence can be replayed with the sibling Confido CLI using an independently chosen policy and evaluation time. Replay is a historical decision and cannot open chat.
 
-You can run the following commands using `make`:
-
-- `make build`: This command builds the Docker image with the tag `confidential-ai-example`. It creates a containerised environment with all the required dependencies, including the `confido` Attested-TLS library, the `httpx` standard HTTP client (which supports user-defined trusted TLS certificates), and the open-source [OpenAI](https://pypi.org/project/openai/) library for interacting with LLM inference engines.
-
-- `make chat`: This command runs the Docker container and executes the `confai-promter.py` Python script. 
-
-The `confido` library, configured by `confai-promter.py`, outputs debug messages during the verification of the Attested-TLS Evidence. After validating the SNP report and its HCL metadata binding, Confido extracts the vTPM attestation public key from that report metadata and uses it to verify the signed vTPM quote. This establishes the TEE-to-vTPM trust chain shown in the console. This evidence includes the Trusted Platform Module (TPM) cryptographic report, as well as GPU and CPU Trusted Execution Environment (TEE) Remote Attestation reports. Notably, all these reports are cryptographically interconnected, and this interconnection is independently verified by the `confido` client library against CPU and GPU vendors' certificates and well-known software hash-sums.
-
-## Example 
-
-For an example of the output generated by running the `make chat` command, refer to the [example-output.md](example-output.md) file.
-
+Use the Confido [rerun checklist](../confido/docs/revision/rerun.md) for the full frozen demonstration. [Example output](example-output.md) explains the stage sequence; observed run records remain authoritative.
