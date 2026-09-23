@@ -176,7 +176,8 @@ def main():
     print("\nConfido evidence-appraisal chat demo")
     print("Before chat, Confido verifies TEE/HCL evidence, a fresh vTPM quote, PCRs and the IMA log.")
     print()
-    print("TEE  = Trusted Execution Environment")
+    print("TEE  = Trusted Execution Environment, isolating private VM memory from the hypervisor and providing CPU-signed attestation report.")
+    print("HCL  = Host Compatibility Layer, OpenHCL/OpenVMM paravisor whose attestation metadata binds the vTPM public key to the TEE report.")
     print("TPM  = Trusted Platform Module (vTPM: virtual TPM); PCR = Platform Configuration Register")
     print("IMA  = Integrity Measurement Architecture")
     while True:
