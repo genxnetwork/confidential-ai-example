@@ -9,7 +9,7 @@ RUN apt-get update && \
         software-properties-common \
         && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN pip install confido-atls==0.1.2 httpx openai --index-url=https://pypi.org/simple
+RUN pip install confido-atls==0.2.0 httpx openai --index-url=https://pypi.org/simple
 
 RUN useradd -m -d /user -s /bin/bash user   
 WORKDIR /user
