@@ -5,6 +5,9 @@ application admission. `demo/collection.py` retrieves raw inputs; `confido_verif
 checks bytes and local policy; `native_transport/` authenticates the actual TLS
 peer; `demo/admission.py` checks the attestation endpoint over that TLS connection
 before credentials are read.
+The component guides cover [`demo/`](demo/README.md),
+[`native_transport/`](native_transport/README.md),
+[`scripts/`](scripts/README.md), and [`tests/`](tests/README.md).
 
 ## Local development
 
