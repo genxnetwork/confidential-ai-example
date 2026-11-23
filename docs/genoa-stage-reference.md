@@ -15,8 +15,9 @@ reference. The first live acceptance is in
 `../../confido/docs/revision/acceptance-genoa-manual-20261123.md`.
 The later direct report endpoint acceptance is in
 `../../confido/docs/revision/acceptance-genoa-direct-20261123.md`. It passed on
-isolated local ports with a synthetic downstream responder. Public deployment
-still requires its own configuration review and promotion.
+isolated local ports with a synthetic downstream responder, including a
+rebuilt local container match/mismatch run. Public deployment still requires
+its own configuration review and promotion.
 
 To regenerate the positive policy from a clean checkout at the pinned registry
 commit:
