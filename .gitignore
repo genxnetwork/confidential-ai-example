@@ -174,3 +174,14 @@ build-manifest.json
 native_transport/target/
 native_transport/dist/
 __pycache__/
+
+# Local agent/tool output and private runtime archives
+.ruff_cache/
+.artifacts/
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+CLAUDE.local.md
+.claude/settings.local.json

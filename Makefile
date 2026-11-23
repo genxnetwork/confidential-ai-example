@@ -3,7 +3,7 @@ VENV ?= .venv
 CONFIDO_LIB ?= ../confido/lib
 MATURIN ?= $(abspath $(VENV))/bin/maturin
 DOCKER ?= docker
-IMAGE ?= confidential-ai-example:0.4.0
+IMAGE ?= confidential-ai-example:0.2.0
 .PHONY: dev-setup dev-update dev-chat dev-info wheel build chat test
 $(VENV)/bin/pip:
 	$(PYTHON) -m venv $(VENV)
@@ -25,7 +25,7 @@ dev-chat:
 	CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(VENV)/bin/python confai-promter.py
 build: dev-update
 	$(DOCKER) build --platform linux/amd64 -t $(IMAGE) .
-	$(VENV)/bin/python scripts/build_manifest.py $(DOCKER)
+	$(VENV)/bin/python scripts/build_manifest.py $(DOCKER) $(IMAGE)
 chat:
 	$(DOCKER) run --rm --platform linux/amd64 -it --env CONFIDO_USERNAME --env CONFIDO_PASSWORD --env CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(IMAGE)
 test:

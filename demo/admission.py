@@ -1,8 +1,10 @@
 """Application decisions are separate from evidence verification results."""
+
 import base64
 import json
 import os
-from .transport import Session
+
+from _confai_transport import Session
 
 
 def save_private(path, record):
@@ -17,9 +19,13 @@ def authenticate(app, result, *, run=None):
     if run is None:
         raise ValueError("Live caller context required for admission")
     run.ensure_current(app, result)
-    certificate = base64.b64decode(result["verified_artifacts"]["certificate_der_base64"], validate=True)
+    certificate = base64.b64decode(
+        result["verified_artifacts"]["certificate_der_base64"], validate=True
+    )
     session = Session(app["origin"], certificate)
-    status, _, _ = session.request("HEAD", app["origin"].rstrip("/") + "/tee-report", [], b"")
+    status, _, _ = session.request(
+        "HEAD", app["origin"].rstrip("/") + "/tee-report", [], b""
+    )
     if status != 204:
         raise ValueError("Attestation endpoint unavailable on the appraised HTTPS peer")
     run.ensure_current(app, result)

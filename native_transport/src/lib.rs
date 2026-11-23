@@ -173,11 +173,15 @@ impl AppraisedClient {
 fn error(e: impl ToString) -> PyErr {
     pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
 }
+
+type PythonResponse = (u16, Vec<(String, String)>, Py<PyBytes>);
+
 #[pyclass]
 struct Session {
     runtime: tokio::runtime::Runtime,
     client: AppraisedClient,
 }
+// PyO3 0.20 expands this attribute into non-local impls with newer rustc.
 #[pymethods]
 impl Session {
     #[new]
@@ -215,7 +219,7 @@ impl Session {
         url: &str,
         headers: Vec<(String, String)>,
         body: &[u8],
-    ) -> PyResult<(u16, Vec<(String, String)>, Py<PyBytes>)> {
+    ) -> PyResult<PythonResponse> {
         let (status, headers, bytes) = py
             .allow_threads(|| {
                 self.runtime

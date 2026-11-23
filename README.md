@@ -20,7 +20,7 @@ make build
 
 The sibling Confido checkout defaults to `../confido/lib`; override `CONFIDO_LIB`
 if needed. Two independently hashed wheels are installed: `confido-verifier`
-0.2.0 and `confai-transport` 0.4.0. Dependencies remain pinned in requirements.lock.
+0.2.0 and `confai-transport` 0.2.0. Dependencies remain pinned in requirements.lock.
 `make build` consumes those exact wheel hashes. No package publication is needed.
 
 Configure `CONFIDO_USERNAME`/`CONFIDO_PASSWORD` or a private `.credentials.json`.
@@ -31,7 +31,9 @@ application-policy option. Exact attested DER, hostname and validity are checked
 by the app-owned Rust/rustls adapter on every connection; other origins and
 redirects are rejected. This adapter does not import the evidence verifier.
 
-Profiles contain a locally approved HTTPS origin and a `verifier_policy` filename.
+The [profile catalog](profiles/README.md) explains each demo and Genoa stage
+policy. Application profiles contain a locally approved HTTPS origin and a
+`verifier_policy` filename.
 Verifier policies contain the independently enrolled root, platform and reference.
 Match/mismatch use the same verifier code path with different local reference pins.
 This repository owns these demo policies. The Genoa stage enrollment inputs and
