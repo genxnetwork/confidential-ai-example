@@ -24,7 +24,6 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     for name,status in [('match','verified'),('mismatch','policy_mismatch')]:
         page.locator('#policy').set_input_files(ROOT/f'profiles/verifier-{name}.json')
         page.locator('#origin').select_option('https://'+name+'.demo.genxt.network')
-        page.locator('#service').fill(f'attestation-{name}.genxt.demo-chat')
         page.locator('#live').click()
         try:expect(page.locator('#save')).to_be_enabled(timeout=150000)
         except Exception:raise RuntimeError(name+': '+page.locator('#status').inner_text()) from None

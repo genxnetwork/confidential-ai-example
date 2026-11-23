@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Isolated hardware-backed acceptance run. Never replaces public listeners.
 Requires compatible verifier and application transport wheels, a built
-collector/sidecar, Nginx and access to the TPM.
+collector, Nginx and access to the TPM.
 The downstream chat responder is explicitly synthetic: no external inference.
 """
 import argparse
@@ -19,7 +19,6 @@ import subprocess
 import threading
 import time
 from unittest.mock import patch
-import urllib.request
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -37,9 +36,7 @@ def wait_port(port, process=None):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--sidecar',type=Path,required=True)
     parser.add_argument('--confido-root',type=Path,default=ROOT.parent/'confido')
-    parser.add_argument('--sidecar-config-dir',type=Path,default=ROOT/'deploy/genxt-demo')
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--container',help='Also exercise this frozen client image')
     parser.add_argument('--match-verifier-policy',type=Path,default=ROOT/'profiles/verifier-match.json')
@@ -58,7 +55,7 @@ def main():
         raise ValueError('Stage policies must use different references')
     args.out.mkdir(mode=0o700,parents=True,exist_ok=False)
     stage=args.out.resolve()
-    for port in [18001,18082,18083,19091,19092,18443,18444,14000]:
+    for port in [18001,18443,18444,14000]:
         with socket.socket() as sock:
             if sock.connect_ex(('127.0.0.1',port))==0: raise RuntimeError(f'Port {port} already in use')
     policies=stage/'profiles'; policies.mkdir()
@@ -85,12 +82,7 @@ def main():
     try:
         server=start(['sudo','-n','sh','-c','umask 077; echo $$ > "$1"; shift; exec "$@"','confido-stage',str(stage/'server.pid'),str(collector),'127.0.0.1:18001',str(certdir),'sha256','--tls-hostname','localhost'],'server.log')
         wait_port(18001,server)
-        for name,port,metrics,tls_port in [('match',18082,19091,18443),('mismatch',18083,19092,18444)]:
-            config=args.sidecar_config_dir/f'{name}-demo.yaml'
-            local_config=stage/f'{name}.yaml';local_config.write_bytes(config.read_bytes())
-            env={**os.environ,'SERVICE_CONFIG_PATH':str(local_config),'LISTEN_ADDR':f'127.0.0.1:{port}','METRICS_LISTEN_ADDR':f'127.0.0.1:{metrics}','TEE_REPORT_ENDPOINT':'/tee-report'}
-            sidecar=start([str(args.sidecar.resolve())],f'{name}-sidecar.log',env)
-            wait_port(port,sidecar)
+        for name,tls_port in [('match',18443),('mismatch',18444)]:
             policy=json.loads((ROOT/'profiles'/f'{name}.json').read_text());policy['origin']=f'https://localhost:{tls_port}'
             (policies/f'{name}.json').write_text(json.dumps(policy,indent=2))
             (policies/policy['verifier_policy']).write_bytes(verifier_policy_bytes[name])
@@ -103,14 +95,13 @@ http {
   log_format stage '$server_port $request_method $uri $status auth=$has_auth';
   access_log PATH/nginx-access.log stage;
 '''.replace('PATH',str(stage))
-        for tls_port,metadata in [(18443,18082),(18444,18083)]:
+        for tls_port in (18443,18444):
             nginx+=f'''server {{
  listen 127.0.0.1:{tls_port} ssl;
  server_name localhost;
  ssl_certificate {certdir}/certificate.pem;
  ssl_certificate_key {certdir}/private_key.pem;
  ssl_protocols TLSv1.2 TLSv1.3;
- location = /service-info {{proxy_pass http://127.0.0.1:{metadata}/service-info;}}
  location = /tee-report {{client_max_body_size 1k;proxy_read_timeout 25s;proxy_pass http://127.0.0.1:18001/tee-report;}}
  location = /aTLS {{return 404;}}
  location /v1/ {{proxy_pass http://127.0.0.1:14000;}}
@@ -126,12 +117,12 @@ http {
         spec=importlib.util.spec_from_file_location('chat_demo',ROOT/'confai-promter.py')
         demo=importlib.util.module_from_spec(spec);spec.loader.exec_module(demo)
         from demo import collection, admission
-        def connect(policy, preview, path):
-            run=collection.collect_and_verify(policy,preview)
+        def connect(policy, path):
+            run=collection.collect_and_verify(policy)
             result, archive=run.result, run.archive
             assert result["status"] == "verified", "Transport case must start with verified evidence"
             admission.save_private(path,archive)
-            session=admission.authenticate(policy,preview,result,run=run)
+            session=admission.authenticate(policy,result,run=run)
             run.consume(policy,result)
             return session
         for name,expected in [('match',True),('mismatch',False)]:
@@ -148,8 +139,8 @@ http {
             assert observed==int(expected)
             results.append({'id':f'installed_wheel_{name}','expected_admitted':expected,'observed_admitted':client is not None,'application_requests':observed})
         # A shared certificate cannot transfer admission to another origin.
-        policy=collection.load_policy(policies/'match.json');preview=collection.discover(policy)
-        admitted=connect(policy,preview,stage/'scope-test.json')
+        policy=collection.load_policy(policies/'match.json')
+        admitted=connect(policy,stage/'scope-test.json')
         before=len(captures)
         for origin in ['https://localhost:18444','http://localhost:18443','https://127.0.0.1:18443']:
             try: admitted.request('POST',origin+'/v1/chat/completions',[('authorization','stage-only-sentinel')],b'{}')
@@ -159,28 +150,11 @@ http {
         results.append({'id':'origin_scope_shared_certificate','rejected_targets':3,'application_requests':0})
         # Fresh real evidence is insufficient when the TLS name is wrong.
         bad=dict(policy,origin='https://127.0.0.1:18443')
-        try: connect(bad,collection.discover(bad),stage/'wrong-host.json')
+        try: connect(bad,stage/'wrong-host.json')
         except (RuntimeError,ValueError): pass
         else: raise AssertionError('Wrong TLS hostname admitted')
         r={'reason':'https_authentication_failed'}
         results.append({'id':'wrong_tls_hostname','observed':r['reason'],'application_requests':0})
-        # Hot-reloaded service identity must not replace the verifier's identity.
-        original=collection.discover(policy)
-        configfile=stage/'match.yaml';text=configfile.read_text();configfile.write_text(text.replace('attestation-match.genxt.demo-chat','changed-service-id'))
-        for _ in range(30):
-            info=json.load(urllib.request.urlopen('http://127.0.0.1:18082/service-info',timeout=2))
-            if info['id']=='changed-service-id': break
-            time.sleep(.1)
-        try: connect(policy,original,stage/'changed-metadata.json')
-        except (RuntimeError,ValueError): pass
-        else: raise AssertionError('Changed identity admitted')
-        r={'reason':'https_authentication_failed'}
-        results.append({'id':'changed_metadata','observed':r['reason'],'application_requests':0})
-        configfile.write_text(text)
-        for _ in range(30):
-            info=json.load(urllib.request.urlopen('http://127.0.0.1:18082/service-info',timeout=2))
-            if info['id']==policy['service_id']: break
-            time.sleep(.1)
         if args.container:
             # The container uses the same isolated public contract and new wheel.
             before=len(captures)
@@ -192,8 +166,8 @@ http {
             assert len(captures)-before==1
             results.append({'id':'container_pair','match_requests':1,'mismatch_requests':0,'image':args.container})
         access=(stage/'nginx-access.log').read_text().splitlines()
-        assert not any('auth=1' in line and ('/service-info ' in line or '/tee-report ' in line) for line in access)
-        results.append({'id':'no_credentials_during_appraisal','discovery_report_requests':sum('/service-info ' in l or '/tee-report ' in l for l in access),'credential_bearing_discovery_report_requests':0})
+        assert not any('auth=1' in line and '/tee-report ' in line for line in access)
+        results.append({'id':'no_credentials_during_appraisal','report_requests':sum('/tee-report ' in l for l in access),'credential_bearing_report_requests':0})
         report={'started_at':started,'ended_at':datetime.now(timezone.utc).isoformat(),'tests':results,'downstream':'synthetic OpenAI-compatible responder; no inference evaluated','hardware':'live VM TPM collector and AMD-endorsed SNP evidence','requests':captures}
         (stage/'acceptance.json').write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps(report,indent=2))
@@ -223,7 +197,7 @@ http {
                 try: process.wait(timeout=5)
                 except subprocess.TimeoutExpired: subprocess.run(['sudo','-n','kill','-KILL',str(process.pid)],check=False)
         # Check that no isolated listener survives cleanup.
-        for port in [18001,18082,18083,18443,18444,14000]:
+        for port in [18001,18443,18444,14000]:
             for _ in range(20):
                 with socket.socket() as sock:
                     if sock.connect_ex(('127.0.0.1',port))!=0:break

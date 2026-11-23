@@ -1,7 +1,6 @@
 {
   "schema_version": 2,
   "origin": "https://mismatch.demo.genxt.network",
-  "service_id": "attestation-mismatch.genxt.demo-chat",
   "verifier_policy": "verifier-mismatch.json",
   "allow_untrusted_bootstrap": true
 }

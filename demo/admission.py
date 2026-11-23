@@ -2,7 +2,6 @@
 import base64
 import json
 import os
-from .collection import metadata_consistent, validate_discovery
 from .transport import Session
 
 
@@ -12,7 +11,7 @@ def save_private(path, record):
         json.dump(record, stream, indent=2)
 
 
-def authenticate(app, preview, result, *, run=None):
+def authenticate(app, result, *, run=None):
     if result.get("scope") != "evidence_only" or result.get("status") != "verified":
         raise ValueError("Evidence verification did not pass")
     if run is None:
@@ -20,12 +19,8 @@ def authenticate(app, preview, result, *, run=None):
     run.ensure_current(app, result)
     certificate = base64.b64decode(result["verified_artifacts"]["certificate_der_base64"], validate=True)
     session = Session(app["origin"], certificate)
-    status, _, body = session.request("GET", app["origin"].rstrip("/") + "/service-info", [], b"")
-    if status != 200 or len(body) > 64 * 1024:
-        raise ValueError("Authenticated metadata unavailable")
-    confirmed = json.loads(body)
-    validate_discovery(confirmed, app)
-    if not metadata_consistent(preview, confirmed):
-        raise ValueError("Service identity changed after peer authentication")
+    status, _, _ = session.request("HEAD", app["origin"].rstrip("/") + "/tee-report", [], b"")
+    if status != 204:
+        raise ValueError("Attestation endpoint unavailable on the appraised HTTPS peer")
     run.ensure_current(app, result)
     return session

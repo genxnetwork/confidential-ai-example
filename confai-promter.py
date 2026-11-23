@@ -62,10 +62,7 @@ def setup_client(endpoint):
     """A current runtime and a fresh caller-owned run are required for admission."""
     runtime = ensure_runtime()
     policy = load_policy(endpoint)
-    preview = collection.discover(policy)
-    print("\nSERVICE INFO | " + policy["origin"])
-    print("Bootstrap metadata; not authenticated by the evidence verifier.")
-    print(json.dumps(preview, indent=2))
+    print("\nATTESTATION ENDPOINT | " + policy["origin"] + "/tee-report")
     print("Reference: " + reference_link(policy))
     print("A quote binds the challenge, certificate and IMA log. TLS session binding is unsupported.")
     answer = input("Retrieve and verify the report before chat? [Y/n]: ").strip().lower()
@@ -76,7 +73,7 @@ def setup_client(endpoint):
     result = None
     print("\n" + color("ATTESTATION LOG", "heading") + "  " + format_utc(datetime.now(timezone.utc)), flush=True)
     try:
-        run = collection.collect_and_verify(policy, preview, progress=attestation_log)
+        run = collection.collect_and_verify(policy, progress=attestation_log)
         result, archive = run.result, run.archive
         admission.save_private(bundle_path, archive)
         admission.save_private(bundle_path.with_suffix('.runtime.json'), {"runtime": runtime, "timings": run.timings})
@@ -87,9 +84,9 @@ def setup_client(endpoint):
             show_result(result, reason=result['reason'])
             print("Chat was not opened. No application request or credential was sent.")
             return None
-        attestation_log("Authenticating the HTTPS peer against the quote-bound certificate; confirming service identity")
-        session = admission.authenticate(policy, preview, result, run=run)
-        attestation_log("HTTPS peer authenticated; service identity and report advertisement confirmed")
+        attestation_log("Authenticating the HTTPS peer against the quote-bound certificate")
+        session = admission.authenticate(policy, result, run=run)
+        attestation_log("HTTPS peer and attestation endpoint authenticated")
         run.consume(policy, result)
         credentials = read_credentials()
         http_client = httpx.Client(transport=AppraisedTransport(session), auth=credentials, follow_redirects=False, timeout=30.0)

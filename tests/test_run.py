@@ -60,5 +60,5 @@ class LiveRunTests(unittest.TestCase):
         app, run = make_run()
         with patch.object(admission, 'Session') as session:
             with self.assertRaisesRegex(ValueError, 'Live'):
-                admission.authenticate(app, {}, run.result)
+                admission.authenticate(app, run.result)
             session.assert_not_called()

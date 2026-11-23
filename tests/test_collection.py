@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
 import httpx
 from demo import collection, admission
 
@@ -28,21 +29,29 @@ class CollectionTests(unittest.TestCase):
         nonce = bytes(range(32))
         encoded = base64.b64encode(nonce).decode()
         messages = []
-        with patch.object(collection, 'validate_discovery'), patch.object(collection.secrets, 'token_bytes', return_value=nonce), patch.object(collection, 'fetch', side_effect=RuntimeError('request intercepted')) as fetch:
+        with patch.object(collection.secrets, 'token_bytes', return_value=nonce), patch.object(collection, 'fetch', side_effect=RuntimeError('request intercepted')) as fetch:
             with self.assertRaisesRegex(RuntimeError, 'request intercepted'):
-                collection.collect_and_verify({'origin': 'https://example.test'}, {}, progress=messages.append)
+                collection.collect_and_verify({'origin': 'https://example.test'}, progress=messages.append)
+        self.assertEqual(fetch.call_args.args[0], 'https://example.test/tee-report')
         self.assertEqual(fetch.call_args.kwargs['body'], {'nonce': encoded})
         self.assertTrue(any('sending nonce in JSON body' in message and encoded in message for message in messages))
 
-    def test_discovery_has_no_policy_authority(self):
-        app={'service_id':'expected'}
-        for data in ({'id':'other'}, {'id':'expected','teeReport':{'verified':True}}):
-            with self.assertRaises(ValueError):collection.validate_discovery(data,app)
-        self.assertFalse(collection.metadata_consistent({'id':'a'},{'id':'b'}))
     def test_evidence_failure_never_constructs_transport(self):
         with patch.object(admission,'Session') as session:
-            with self.assertRaises(ValueError):admission.authenticate({}, {}, {'scope':'evidence_only','status':'policy_mismatch'})
+            with self.assertRaises(ValueError):admission.authenticate({}, {'scope':'evidence_only','status':'policy_mismatch'})
             session.assert_not_called()
+    def test_peer_probe_uses_direct_endpoint_without_credentials(self):
+        app={'origin':'https://example.test'}
+        result={'scope':'evidence_only','status':'verified','verified_artifacts':{'certificate_der_base64':base64.b64encode(b'cert').decode()}}
+        run=Mock()
+        with patch.object(admission,'Session') as factory:
+            factory.return_value.request.return_value=(204,[],b'')
+            admission.authenticate(app,result,run=run)
+            factory.assert_called_once_with(app['origin'],b'cert')
+            factory.return_value.request.assert_called_once_with('HEAD','https://example.test/tee-report',[],b'')
+            factory.return_value.request.return_value=(405,[],b'')
+            with self.assertRaisesRegex(ValueError,'endpoint unavailable'):
+                admission.authenticate(app,result,run=run)
     def test_policy_cannot_escape_local_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'app.json';path.write_text(json.dumps({'schema_version':2,'origin':'https://example.test','verifier_policy':'../outside.json'}))

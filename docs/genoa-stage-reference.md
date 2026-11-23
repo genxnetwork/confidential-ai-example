@@ -13,6 +13,8 @@ Teraveri commit `3fa7913d44a377806bd94126589be1feb362b6cb`; the negative
 policy uses the same Genoa platform enrollment with an incompatible historical
 reference. The recorded live acceptance is in
 `../../confido/docs/revision/acceptance-genoa-manual-20261123.md`.
+That record predates the direct report endpoint flow. Repeat the hardware
+acceptance below before claiming the current deployment has passed.
 
 To regenerate the positive policy from a clean checkout at the pinned registry
 commit:
@@ -37,7 +39,6 @@ Run isolated positive/negative hardware acceptance from this checkout:
 
 ```sh
 .venv/bin/python scripts/stage_demo.py \
-  --sidecar /tmp/ga4gh-service-info \
   --out /private/new-genoa-stage-run \
   --match-verifier-policy profiles/verifier-genoa-stage-registry.json \
   --mismatch-verifier-policy profiles/verifier-genoa-stage-mismatch.json

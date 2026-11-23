@@ -65,23 +65,6 @@ def fetch(url, *, method="GET", body=None, limit=MAX_BODY, untrusted=False, toke
             return bytes(data), dict(response.headers)
 
 
-def validate_discovery(info, app):
-    expected = {"profile": "azure-snp-vtpm-ima/1", "wireVersion": 1, "endpoint": "/tee-report", "method": "POST", "nonce": {"name": "nonce", "in": "body", "encoding": "base64", "sizeBytes": 32}, "response": {"evidenceField": "evidence", "certificateField": "certificate"}, "sessionBinding": {"supported": False}}
-    if info.get("id") != app["service_id"] or info.get("teeReport") != expected:
-        raise ValueError("Unsupported discovery or service identity")
-
-
-def metadata_consistent(a, b):
-    return all(a.get(k) == b.get(k) for k in ("id", "type", "version", "teeReport"))
-
-
-def discover(app):
-    data, _ = fetch(app["origin"].rstrip("/") + "/service-info", limit=MAX_METADATA, untrusted=app.get("allow_untrusted_bootstrap", False))
-    info = json.loads(data)
-    validate_discovery(info, app)
-    return info
-
-
 def kds(url):
     now = time.monotonic()
     if url in _cache and _cache[url][0] > now:
@@ -110,9 +93,8 @@ def kds(url):
     raise RuntimeError("KDS unavailable")
 
 
-def collect_and_verify(app, preview, *, progress=None):
+def collect_and_verify(app, *, progress=None):
     emit = progress or (lambda message: None)
-    validate_discovery(preview, app)
     nonce = secrets.token_bytes(32)
     started = time.monotonic()
     deadline = started + 120
@@ -161,7 +143,7 @@ def collect_and_verify(app, preview, *, progress=None):
     timings = {"collection_ms": (collection_finished - started) * 1000,
                "verification_ms": (verify_finished - verify_started) * 1000}
     emit(f'Inputs collected in {timings["collection_ms"]:.1f} ms; local verification completed in {timings["verification_ms"]:.2f} ms')
-    archive = {"schema_version": 2, "mode": "live_collection", "origin": app["origin"], "service_info": preview,
+    archive = {"schema_version": 2, "mode": "live_collection", "origin": app["origin"],
                "inputs": {name: base64.b64encode(data).decode() for name, data in [("report", report), ("amd_chain", chain), ("vcek", vcek), ("reference", reference)]},
                "context": {"expected_nonce_base64": base64.b64encode(nonce).decode(), "evaluation_unix_seconds": at}, "verification": result}
     return LiveRun(result, archive, deadline, hashlib.sha256(app["verifier_bytes"]).hexdigest(), timings)

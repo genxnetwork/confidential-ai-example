@@ -30,16 +30,20 @@ application-policy option. Exact attested DER, hostname and validity are checked
 by the app-owned Rust/rustls adapter on every connection; other origins and
 redirects are rejected. This adapter does not import the evidence verifier.
 
-Profiles now contain origin/service identity and a local `verifier_policy` filename.
+Profiles contain a locally approved HTTPS origin and a `verifier_policy` filename.
 Verifier policies contain the independently enrolled root, platform and reference.
 Match/mismatch use the same verifier code path with different local reference pins.
 This repository owns these demo policies. The Genoa stage enrollment inputs and
 positive/negative policies also live under `profiles/`; `scripts/enroll_reference.py`
 verifies the registry publisher statement and emits a pinned verifier policy.
 The reference bytes and publisher statements remain in their own registries.
-The GENXT routing, sidecar and browser-extension host configuration is under
+The GENXT routing and browser-extension host configuration is under
 `deploy/genxt-demo/`. The generic verifier accepts policy bytes supplied by its
 caller and does not choose these trust pins.
+The caller sends a nonce directly to `POST /tee-report`; no metadata discovery
+selects the report endpoint or a reference. After evidence appraisal, a
+credentialless `HEAD /tee-report` over quote-bound certificate-pinned TLS
+authenticates the intended peer before application credentials are read.
 The run directory holds a v2 verification archive, `.runtime.json` with build metadata
 and collection/verification timings, and a separate `.decision.json`;
 only the latter contains `application_admitted`.
