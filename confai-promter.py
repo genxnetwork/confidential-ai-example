@@ -1,5 +1,10 @@
 """Point-in-time evidence appraisal before a cooperating client opens chat."""
-import confido
+import confido_verifier
+import base64
+from demo import collection, admission
+from demo.transport import AppraisedTransport
+from demo.attestation_log import log as attestation_log, format_utc, color, describe_verification
+from demo.runtime import ensure_runtime
 import os
 from pathlib import Path
 import json
@@ -13,24 +18,12 @@ ENDPOINTS = {"match": "match.demo.genxt.network", "mismatch": "mismatch.demo.gen
 
 
 def load_policy(endpoint):
-    return json.loads((POLICY_DIR / f"{endpoint}.json").read_text())
+    return collection.load_policy(POLICY_DIR / f"{endpoint}.json")
 
 
 def reference_link(policy):
-    ref = policy["reference"]
+    ref = policy["verifier"]["reference"]
     return f'https://github.com/{ref["repository"]}/blob/{ref["commit"]}/{ref["path"]}'
-
-
-class AppraisedTransport(httpx.BaseTransport):
-    """All requests pass through Confido's private, origin-scoped HTTPS client."""
-    def __init__(self, session):
-        self.session = session
-
-    def handle_request(self, request):
-        status, headers, body = self.session.request(
-            request.method, str(request.url), list(request.headers.multi_items()), request.read()
-        )
-        return httpx.Response(status, headers=headers, content=body, request=request)
 
 
 def read_credentials():
@@ -51,75 +44,66 @@ def new_bundle_path(endpoint):
     return run / f"{endpoint}.json"
 
 
-def show_result(result):
-    print("\nAPPRAISAL STAGES")
-    print("-" * 68)
-    for check in result["checks"]:
-        print(f'  {check["status"].upper():6}  {check["stage"]}: {check["detail"]}')
-    print(f'\nDecision: {result["status"].upper()} ({result["reason"]})')
-    print(f'IMA coverage: {result["coverage"]["ima_entries"]} enrolled entries; boot aggregate and kernel modules.')
+def show_result(result, *, admitted=False, reason=None):
+    print("\n" + color("ATTESTATION SUMMARY", "heading"))
+    if result is None:
+        print("  Evidence: NOT VERIFIED")
+    else:
+        kind = "ok" if result["status"] == "verified" else "error"
+        print(f'  Evidence: {color(result["status"].upper(), kind)} ({result["reason"]})')
+        print(f'  Confirmed IMA coverage: {result["coverage"]["ima_entries"]} entries; boot aggregate and kernel modules.')
+    print('  Application: ' + color('ADMITTED' if admitted else 'DENIED', 'ok' if admitted else 'error'))
+    if reason:
+        print('  Reason: ' + str(reason))
     print("Application/model files and GPU state are outside this measurement coverage.")
 
 
 def setup_client(endpoint):
-    """No application credentials are read until all required stages pass."""
-    if getattr(confido, "__version__", None) != "0.3.0":
-        raise RuntimeError("This demo requires the local Confido 0.3.0 wheel; run make dev-update")
+    """A current runtime and a fresh caller-owned run are required for admission."""
+    runtime = ensure_runtime()
     policy = load_policy(endpoint)
-    config_json = json.dumps(policy)
-    preview = json.loads(confido.discover_py(config_json))
-    print("\n" + "=" * 68)
-    print(f'SERVICE INFO  |  {policy["origin"]}')
-    print("=" * 68)
-    print("Bootstrap preview: the HTTPS peer has not been authenticated yet.")
-    print("These fields are display-only until appraisal and HTTPS authentication pass.\n")
-    print(json.dumps(preview, indent=2, ensure_ascii=True))
-    ad = preview.get("teeReport", {})
-    if ad.get("profile") != "azure-snp-vtpm-ima/1" or ad.get("wireVersion") != 1:
-        print("\nTEE report advertisement is incompatible: profile/version upgrade required.")
+    preview = collection.discover(policy)
+    print("\nSERVICE INFO | " + policy["origin"])
+    print("Bootstrap metadata; not authenticated by the evidence verifier.")
+    print(json.dumps(preview, indent=2))
+    print("Reference: " + reference_link(policy))
+    print("A quote binds the challenge, certificate and IMA log. TLS session binding is unsupported.")
+    answer = input("Retrieve and verify the report before chat? [Y/n]: ").strip().lower()
+    if answer not in ("", "y", "yes"):
         print("Chat was not opened.")
         return None
-    print("\nTEE attestation report is available (advertised; not yet verified).")
-    print(f'  Report: POST {policy["origin"]}/tee-report')
-    print(f'  TRS configured: {reference_link(policy)}')
-    print(f'  Reference SHA-256: {policy["reference"]["sha256"]}')
-    print("  TLS session binding: NOT SUPPORTED.")
-    print("  A fresh vTPM quote binds the nonce, certificate and IMA log.")
-    print("  The SNP report is not necessarily regenerated for this request.")
-    print("  RFC 9261 standardizes Exported Authenticators; IETF SEAT attestation")
-    print("  integration remains draft work. BoringSSL integration is planned here.")
-    print("  https://www.rfc-editor.org/rfc/rfc9261.html")
-    print("  https://datatracker.ietf.org/wg/seat/documents/")
-    answer = input("\nRetrieve and appraise the report before chat? [Y/n]: ").strip().lower()
-    if answer not in ("", "y", "yes"):
-        print("Appraisal skipped. Chat was not opened.")
-        return None
-
-    print("\nCollecting evidence and a fresh vTPM quote; appraising against the pinned reference...")
-    confido.atls_debug()
     bundle_path = new_bundle_path(endpoint)
-    session = confido.connect_py(config_json, json.dumps(preview), str(bundle_path))
-    result = json.loads(session.result_json)
-    show_result(result)
-    print(f"Run record: {bundle_path.with_suffix('.result.json')}")
-    if not result["application_admitted"]:
-        print("Chat was not opened. No application request or credential was sent.")
+    result = None
+    print("\n" + color("ATTESTATION LOG", "heading") + "  " + format_utc(datetime.now(timezone.utc)), flush=True)
+    try:
+        run = collection.collect_and_verify(policy, preview, progress=attestation_log)
+        result, archive = run.result, run.archive
+        admission.save_private(bundle_path, archive)
+        admission.save_private(bundle_path.with_suffix('.runtime.json'), {"runtime": runtime, "timings": run.timings})
+        describe_verification(result, base64.b64decode(archive['inputs']['report'], validate=True))
+        attestation_log(f"Verification archive saved: {bundle_path}")
+        if result["status"] != "verified":
+            admission.save_private(bundle_path.with_suffix(".decision.json"), {"schema_version": 2, "application_admitted": False, "reason": result["reason"]})
+            show_result(result, reason=result['reason'])
+            print("Chat was not opened. No application request or credential was sent.")
+            return None
+        attestation_log("Authenticating the HTTPS peer against the quote-bound certificate; confirming service identity")
+        session = admission.authenticate(policy, preview, result, run=run)
+        attestation_log("HTTPS peer authenticated; service identity and report advertisement confirmed")
+        run.consume(policy, result)
+        credentials = read_credentials()
+        http_client = httpx.Client(transport=AppraisedTransport(session), auth=credentials, follow_redirects=False, timeout=30.0)
+        client = openai.OpenAI(api_key="null", base_url=f'{policy["origin"]}/v1', http_client=http_client, max_retries=0)
+    except Exception as error:
+        admission.save_private(bundle_path.with_suffix(".decision.json"), {"schema_version": 2, "application_admitted": False, "reason": "collection_or_admission_failed", "detail": str(error)})
+        attestation_log(f"Application admission failed: {error}")
+        show_result(result, reason=str(error))
         return None
+    admission.save_private(bundle_path.with_suffix(".decision.json"), {"schema_version": 2, "application_admitted": True, "reason": "evidence_and_peer_verified", "origin": policy["origin"], "report_sha256": result["report_sha256"]})
+    show_result(result, admitted=True)
+    print("Inference: Azure-hosted inference is outside the appraised VM.")
+    return client
 
-    print("\nTEE report and bound vTPM quote: VERIFIED.")
-    print("  The vTPM public key was extracted from SNP-authenticated HCL metadata")
-    print("  and verified the quote signature: TEE → HCL → vTPM trust chain confirmed.")
-    print("Measured boot and IMA state: matches the configured trusted reference.")
-    print("HTTPS peer: authenticated using the certificate bound into the quote.")
-    print("Service info: critical identity and report fields match the preview.")
-    print("Inference: llama-default forwards to Azure-hosted inference outside this VM's appraisal boundary.")
-    print("Opening chat after successful environment appraisal and HTTPS authentication.\n")
-    # Read secrets only after Confido exposes the admitted session.
-    credentials = read_credentials()
-    http_client = httpx.Client(transport=AppraisedTransport(session), auth=credentials,
-                              follow_redirects=False, timeout=30.0)
-    return openai.OpenAI(api_key="null", base_url=f'{policy["origin"]}/v1',
-                         http_client=http_client, max_retries=0)
 
 def chat_loop(client):
     """Run a chat session, then return to endpoint selection."""
@@ -174,7 +158,7 @@ def chat_loop(client):
 
 def main():
     print("\nConfido evidence-appraisal chat demo")
-    print("Before chat, Confido verifies TEE/HCL evidence, a fresh vTPM quote, PCRs and the IMA log.")
+    print("Before chat, Confido verifies TEE/HCL evidence, a challenge-bound vTPM quote, PCRs and the IMA log.")
     print()
     print("TEE  = Trusted Execution Environment, isolating private VM memory from the hypervisor and providing CPU-signed attestation report.")
     print("HCL  = Host Compatibility Layer, OpenHCL/OpenVMM paravisor whose attestation metadata binds the vTPM public key to the TEE report.")

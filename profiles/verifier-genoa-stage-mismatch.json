@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "profile": "azure-snp-vtpm-ima/1",
+  "platform": {
+    "product": "Genoa",
+    "ark_sha256": "4c6598d19c18719c5dfd4a7d335f674e5bfe1d8f800cea2cf270c10d103db2f1",
+    "minimum_tcb": [12, 0, 28, 88],
+    "launch_measurement": "6587d41e46995d71808f7d92d859e0ed093bea3c55a342c866a20cd1a213ae4e20241bdbc44d5255222da65cce1c7f48"
+  },
+  "reference": {
+    "repository": "genxnetwork/confido-trusted-repository",
+    "commit": "5a591c8ce52c379a5b64f98e45243a5ea5d529e9",
+    "path": "bb-attest-172.201.106.172.json",
+    "sha256": "c8fe1e57c55d0e1cfbc51c8615a09e56be168dade6f00ef652d98ba0a85c3db7"
+  }
+}

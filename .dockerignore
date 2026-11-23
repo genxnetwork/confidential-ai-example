@@ -10,3 +10,7 @@
 !build/wheels/
 !build/wheels/*.whl
 !build/wheel.sha256
+!demo/
+!demo/*.py
+!Makefile
+!build/runtime.json

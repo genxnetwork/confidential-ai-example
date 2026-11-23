@@ -1,65 +1,72 @@
-# Confidential AI Example
+# Confidential AI example — Confido verifier 0.2
 
-A chat client demonstrating **execution-environment evidence appraisal before application use**. It compares measured state with an immutable, verifier-configured reference and either opens chat or withholds the request. Both endpoints use the same verification path:
+A cooperating native client separates evidence verification from transport and
+application admission. `demo/collection.py` retrieves raw inputs; `confido_verifier`
+checks bytes and local policy; `native_transport/` authenticates the actual TLS
+peer; `demo/admission.py` confirms service identity before credentials are read.
 
-- **match:** the enrolled boot/IMA state should match the configured reference;
-- **mismatch:** an intentionally incompatible reference should be rejected.
+## Local development
 
-## Background and discussion
-
-This example is the chat demonstrator discussed in [BioHackCloud issue #17 — “demo: Private LLM Chat through Attested-TLS (Confidential Computing)”](https://github.com/elixir-cloud-aai/biohackcloud-issues/issues/17). The issue introduces the aTLS verification flow to ELIXIR BioHackathon participants, invites feedback, and discusses a possible optional GA4GH-SDK/CLI extension. It provides the original demonstration context and discussion; the protocol, build instructions and assurance scope for this revision are documented below. GA4GH-SDK integration remains prospective.
-
-## What happens before chat
-
-1. Fetch and print `GET https://<host>/service-info` as a bootstrap preview. The initial HTTPS certificate is not yet authenticated; metadata cannot choose the trusted policy.
-2. Show the advertised `POST /tee-report` endpoint and exact pinned reference URL/digest.
-3. Explain the supported bindings and request consent: `Retrieve and appraise the report before chat? [Y/n]:` (Enter accepts).
-4. Generate a fresh challenge and verify AMD endorsements/SNP evidence, HCL's vTPM attestation key, quote signature/nonce/certificate/log binding, signed PCR selection, boot aggregate and exact IMA reference.
-5. Print detailed attestation logs and structured stage outcomes. A valid quote with incompatible measurements is reported as a **reference mismatch**.
-6. Authenticate the intended HTTPS peer using the appraised certificate and re-fetch metadata. Changed service identity, API type/version or report contract fails closed.
-7. Only then read application credentials and open an origin-scoped chat client. Redirects, HTTP downgrade and requests to another origin are rejected by Confido's transport.
-
-Public discovery, report and chat routes use HTTPS 443; HTTP 80 redirects. `/aTLS` is retired. This revision requires the versioned `azure-snp-vtpm-ima/1` advertisement (`wireVersion: 1`) and Confido **0.3.0**; it rejects older advertisements instead of silently falling back.
-
-## What the evidence covers
-
-The initial enrolled profile covers a **boot aggregate and kernel modules**, with an enrolled SNP launch measurement and minimum TCB. The vTPM attestation key comes from HCL metadata authenticated by the SNP report; it verifies the quote that binds the challenge, certificate and IMA log. The quote is fresh for the request; the hardware report is not necessarily regenerated.
-
-Application code/configuration, model files, GPU state and external inference are not covered by this log. In the configured demonstration, `llama-default` forwards to **Azure-hosted inference outside the appraised VM**. Admission is enforced by this cooperating client at a point in time. The server does not require an attestation capability.
-
-`teeReport.sessionBinding.supported` is **false**. The quote's certificate binding does not bind a particular TLS connection or establish relay resistance. [RFC 9261 Exported Authenticators](https://www.rfc-editor.org/rfc/rfc9261.html) are standardized; attestation integration is ongoing [IETF SEAT draft work](https://datatracker.ietf.org/wg/seat/documents/). BoringSSL integration is a planned implementation target.
-
-See the sibling [Confido assurance profile](../confido/docs/revision/decisions/001-bounded-profile.md) for trust assumptions, precise deployment topology and platform-policy limits. Here “TRS” means the configured trusted reference source; the current GitHub-backed repository is not an implementation of the GA4GH Tool Registry Service API.
-
-## Build and run
-
-The frozen demonstration target is Linux x86_64 with CPython 3.10. Keep `confido` and this repository side by side. Native builds require Rust, OpenSSL build prerequisites and TPM2-TSS development libraries listed in Confido's README.
-
-```bash
+```sh
 make dev-setup
+make test
 make dev-chat
-```
-
-`make dev-update` rebuilds the local wheel after Rust changes. `make dev-info` reports installed package provenance. No PyPI publication is required.
-
-For the container path:
-
-```bash
+# Explicitly rebuild both wheels (dev-chat also updates stale builds):
+make dev-update
+# Optional local container build:
 make build
-make chat
 ```
 
-The image consumes the freshly built local 0.3.0 wheel and locked Python dependencies. It never installs the old published 0.2.0 wheel. See `build-manifest.json` generated by the build for wheel/image hashes. Docker on other architectures requires amd64 emulation; only the frozen target is tested.
+The sibling Confido checkout defaults to `../confido/lib`; override `CONFIDO_LIB`
+if needed. Two independently hashed wheels are installed: `confido-verifier`
+0.2.0 and `confai-transport` 0.4.0. Dependencies remain pinned in requirements.lock.
+`make build` consumes those exact wheel hashes. No package publication is needed.
 
-### Operator configuration
+Configure `CONFIDO_USERNAME`/`CONFIDO_PASSWORD` or a private `.credentials.json`.
+The program reads them only after verification and TLS peer/metadata confirmation.
+Decline, collection failure, mismatched evidence and peer failure withhold chat.
+Bootstrap retrieval is credentialless; self-signed bootstrap is an explicit native
+application-policy option. Exact attested DER, hostname and validity are checked
+by the app-owned Rust/rustls adapter on every connection; other origins and
+redirects are rejected. This adapter does not import the evidence verifier.
 
-- `profiles/match.json` and `profiles/mismatch.json` contain verifier-controlled origins, service identities, immutable reference commit/path/digest and platform enrollment. Set `CONFIDO_POLICY_DIR` to a different reviewed policy directory. Do not enroll a reference from an unauthenticated advertisement.
-- Supply credentials through `CONFIDO_USERNAME` / `CONFIDO_PASSWORD`, or an ignored `.credentials.json` file with `username` and `password` keys (`chmod 600`). `CONFIDO_CREDENTIALS_FILE` selects another file. Never commit credentials or bake them into an image.
-- `CONFIDO_RUN_DIR` selects a private evidence directory; default: `~/.local/state/confido/runs`. Bundles/results are created with mode 0600. They contain public attestation material and host measurements, so inspect them before sharing. They contain no application secrets or prompts.
-- Optional `CONFIDO_TRS_TOKEN` is used only for the configured GitHub reference API and is never saved in a bundle.
+Profiles now contain origin/service identity and a local `verifier_policy` filename.
+Verifier policies contain the independently enrolled root, platform and reference.
+Match/mismatch use the same verifier code path with different local reference pins.
+This repository owns these demo policies. The Genoa stage enrollment inputs and
+positive/negative policies also live under `profiles/`; `scripts/enroll_reference.py`
+verifies the registry publisher statement and emits a pinned verifier policy.
+The reference bytes and publisher statements remain in their own registries.
+The GENXT routing, sidecar and browser-extension host configuration is under
+`deploy/genxt-demo/`. The generic verifier accepts policy bytes supplied by its
+caller and does not choose these trust pins.
+The run directory holds a v2 verification archive, `.runtime.json` with build metadata
+and collection/verification timings, and a separate `.decision.json`;
+only the latter contains `application_admitted`.
 
-## Evidence and reruns
+The quote binds nonce, certificate and IMA log. There is no TLS session binder or
+relay-resistance claim. Coverage is enrolled boot aggregate/kernel modules;
+application/model/GPU state and external Azure inference are outside that coverage.
+The browser extension in the Confido repository performs evidence checks entirely
+in WASM and does not use this transport or send chat prompts.
 
-Each accepted appraisal attempt records the challenge, evidence, public AMD endorsements, exact reference bytes and structured decision. Frozen evidence can be replayed with the sibling Confido CLI using an independently chosen policy and evaluation time. Replay is a historical decision and cannot open chat.
+## Runtime and attestation output
 
-Use the Confido [rerun checklist](../confido/docs/revision/rerun.md) for the full frozen demonstration. [Example output](example-output.md) explains the stage sequence; observed run records remain authoritative.
+`make dev-chat` checks current sources, local wheel hashes and the **loaded native
+binary**, then rebuilds and reinstalls stale artifacts in the selected `VENV`.
+A package version alone does not establish compatibility. `make dev-info` checks
+this relationship explicitly; the runtime requires verifier pipeline revision 2.
+Containers use an embedded runtime manifest and need no sibling source checkout.
+Builds whose sources change mid-build are rejected before publishing a manifest.
+
+Caller collection events have real UTC timestamps; completed verifier stages are
+printed in their returned order without invented per-stage timestamps. All IMA
+entries appear immediately before the IMA comparison verdict, with compact hashes.
+An early failure still shows the received entries, explicitly unverified. The
+archive retains full values. Successful labels use ANSI green 32; service details
+use dark gray. `CONFIDO_COLOR=always|auto|never` controls terminal color.
+
+The final summary separates evidence verification from application admission.
+The 120-second monotonic challenge deadline is checked again after rendering and
+TLS/metadata confirmation. A live run is one-use; loading an old archive cannot
+restore it. An expired run or a failed TLS peer never releases credentials.

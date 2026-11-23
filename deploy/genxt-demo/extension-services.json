@@ -1,0 +1,12 @@
+{
+  "services": [
+    {
+      "origin": "https://match.demo.genxt.network",
+      "service_id": "attestation-match.genxt.demo-chat"
+    },
+    {
+      "origin": "https://mismatch.demo.genxt.network",
+      "service_id": "attestation-mismatch.genxt.demo-chat"
+    }
+  ]
+}

@@ -1,26 +1,14 @@
-"""Show installed wheel provenance and verify it against the local built artifact."""
-import hashlib
-import importlib.metadata
-import json
+"""Check current sources, wheel provenance and the actual loaded native modules."""
 from pathlib import Path
 import sys
-from urllib.parse import unquote, urlparse
-import confido
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from demo.runtime import ensure_runtime
 
-root=Path(__file__).resolve().parents[1]
-dist=importlib.metadata.distribution('confido-atls')
-info=json.loads(dist.read_text('direct_url.json') or '{}')
-source=Path(unquote(urlparse(info.get('url','')).path))
-if getattr(confido,'__version__',None)!='0.3.0':
-    raise SystemExit('Stale Confido wheel; run make dev-update')
-expected=root/'build/wheels'/source.name
-if not expected.is_file():
-    raise SystemExit('Local wheel artifact not found; run make dev-update')
-digest=hashlib.sha256(expected.read_bytes()).hexdigest()
-recorded=info.get('archive_info',{}).get('hashes',{}).get('sha256')
-if recorded!=digest:
-    raise SystemExit('Installed wheel differs from build/wheels; run make dev-update')
-print('Confido:',confido.__version__)
-print('Installed from:',source)
-print('Wheel SHA-256:',digest)
-print('Rust source:',Path(sys.argv[1]).resolve() if len(sys.argv)>1 else 'see build manifest')
+if __name__ == '__main__':
+    try:
+        info = ensure_runtime(sys.argv[1] if len(sys.argv) > 1 else None)
+    except RuntimeError as error:
+        raise SystemExit(str(error))
+    print('Runtime verified; pipeline', info['pipeline_revision'])
+    for name, artifact in info['artifacts'].items():
+        print(name, artifact['binary_sha256'])

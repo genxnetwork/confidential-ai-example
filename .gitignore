@@ -169,3 +169,8 @@ cython_debug/
 .credentials.json
 build/
 build-manifest.json
+
+# Native transport build outputs
+native_transport/target/
+native_transport/dist/
+__pycache__/

@@ -1,0 +1,10 @@
+[build-system]
+requires = ["maturin==1.15.0"]
+build-backend = "maturin"
+[project]
+name = "confai-transport"
+version = "0.4.0"
+description = "Application-owned scoped TLS transport for the Confido chat example"
+[tool.maturin]
+bindings = "pyo3"
+module-name = "_confai_transport"

@@ -3,7 +3,8 @@ import importlib.util
 from pathlib import Path
 import sys
 from unittest.mock import patch
-spec=importlib.util.spec_from_file_location('demo',Path(__file__).resolve().parents[1]/'confai-promter.py')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+spec=importlib.util.spec_from_file_location('chat_demo',Path(__file__).resolve().parents[1]/'confai-promter.py')
 demo=importlib.util.module_from_spec(spec);spec.loader.exec_module(demo)
 with patch('builtins.input',return_value=''):
     client=demo.setup_client(sys.argv[1])
