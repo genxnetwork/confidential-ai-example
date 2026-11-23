@@ -3,7 +3,8 @@
 A cooperating native client separates evidence verification from transport and
 application admission. `demo/collection.py` retrieves raw inputs; `confido_verifier`
 checks bytes and local policy; `native_transport/` authenticates the actual TLS
-peer; `demo/admission.py` confirms service identity before credentials are read.
+peer; `demo/admission.py` checks the attestation endpoint over that TLS connection
+before credentials are read.
 
 ## Local development
 
@@ -23,7 +24,7 @@ if needed. Two independently hashed wheels are installed: `confido-verifier`
 `make build` consumes those exact wheel hashes. No package publication is needed.
 
 Configure `CONFIDO_USERNAME`/`CONFIDO_PASSWORD` or a private `.credentials.json`.
-The program reads them only after verification and TLS peer/metadata confirmation.
+The program reads them only after verification and the pinned TLS peer check.
 Decline, collection failure, mismatched evidence and peer failure withhold chat.
 Bootstrap retrieval is credentialless; self-signed bootstrap is an explicit native
 application-policy option. Exact attested DER, hostname and validity are checked
@@ -67,10 +68,10 @@ Caller collection events have real UTC timestamps; completed verifier stages are
 printed in their returned order without invented per-stage timestamps. All IMA
 entries appear immediately before the IMA comparison verdict, with compact hashes.
 An early failure still shows the received entries, explicitly unverified. The
-archive retains full values. Successful labels use ANSI green 32; service details
+archive retains full values. Successful labels use ANSI green 32; endpoint details
 use dark gray. `CONFIDO_COLOR=always|auto|never` controls terminal color.
 
 The final summary separates evidence verification from application admission.
 The 120-second monotonic challenge deadline is checked again after rendering and
-TLS/metadata confirmation. A live run is one-use; loading an old archive cannot
+the pinned TLS peer check. A live run is one-use; loading an old archive cannot
 restore it. An expired run or a failed TLS peer never releases credentials.

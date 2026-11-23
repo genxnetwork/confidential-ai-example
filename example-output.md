@@ -86,7 +86,8 @@ sent in the JSON body of `POST /tee-report`. Verification rows have no per-stage
 execution timestamps: they describe the completed Rust result. Successful labels
 use ANSI green 32 in a terminal; entry numbers and event timestamps use dark gray.
 
-After checking the live challenge deadline, exact TLS peer and service identity,
+After checking the live challenge deadline and the attestation endpoint over the
+certificate-pinned TLS connection,
 the application emits this final summary (illustrative):
 
 ```text
