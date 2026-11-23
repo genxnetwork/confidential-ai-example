@@ -7,7 +7,7 @@ the repository root with `make dev-chat`.
 | Script | Purpose |
 | --- | --- |
 | [`source_fingerprint.py`](source_fingerprint.py) | Hashes selected application and transport source inputs. |
-| [`build_wheels.py`](build_wheels.py), [`install_wheels.py`](install_wheels.py) | Build and install the two exact local wheel artifacts. |
+| [`build_wheels.py`](build_wheels.py), [`install_wheels.py`](install_wheels.py) | Prepare each project's licences, then build, fingerprint and install the two local wheel artifacts. |
 | [`build_manifest.py`](build_manifest.py) | Records wheel and container identity. |
 | [`dev_info.py`](dev_info.py), [`ensure_runtime.py`](ensure_runtime.py) | Inspect the loaded runtime and rebuild stale development artifacts. |
 | [`enroll_reference.py`](enroll_reference.py) | Verify a registry publisher statement and emit a locally pinned verifier policy. |

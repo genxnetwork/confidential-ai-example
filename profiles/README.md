@@ -1,10 +1,15 @@
 # Demo policies and Genoa stage enrollment
 
+Genoa and Milan are AMD EPYC processor generations. The current local test VM
+uses Genoa; the original demo profiles target Milan. Each needs the matching
+AMD certificate chain and its own enrolled platform and measurement values.
+
 This directory contains **application-selected** policies. Confido verifies
 evidence against policy bytes supplied by its caller; it does not select an
 origin, issuer, platform enrollment, or reference from network responses.
-From this repository's root, Confido's JSON contract definitions are in
-`../confido/schemas/` when the two repositories are checked out side by side.
+This repository defines its [application policy and decision schemas](../schemas/README.md).
+Confido's verifier JSON contracts are in `../confido/schemas/` when the two
+repositories are checked out side by side.
 
 | Files | Purpose |
 | --- | --- |

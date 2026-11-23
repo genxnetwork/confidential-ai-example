@@ -173,6 +173,7 @@ build-manifest.json
 # Native transport build outputs
 native_transport/target/
 native_transport/dist/
+native_transport/licenses/
 __pycache__/
 
 # Local agent/tool output and private runtime archives

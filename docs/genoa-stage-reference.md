@@ -1,5 +1,8 @@
 # Genoa stage reference enrollment
 
+Genoa is the AMD EPYC processor generation used by the current local test VM.
+Here, a stage reference means a candidate enrollment for that test environment.
+
 The Teraveri registry holds the immutable Genoa 1071 stage reference. GENXT's
 one-use Ed25519 publisher statement is copied into that registry entry. This
 application chooses which issuer and platform it trusts through

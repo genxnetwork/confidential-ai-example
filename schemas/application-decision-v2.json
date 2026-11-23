@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "application-decision-v2",
+  "description": "Application-owned admission outcome after evidence appraisal and the application's transport and identity checks.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "enum": [
+        2
+      ]
+    },
+    "application_admitted": {
+      "description": "Whether this application admitted the run; an evidence-only verifier result cannot set this value.",
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string"
+    },
+    "report_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "application_admitted",
+    "reason"
+  ],
+  "additionalProperties": false
+}

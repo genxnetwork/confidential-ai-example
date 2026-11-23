@@ -1,5 +1,7 @@
 *
 !Dockerfile
+!LICENSE
+!THIRD_PARTY_NOTICES.md
 !requirements.lock
 !confai-promter.py
 !profiles/

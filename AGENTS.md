@@ -6,7 +6,8 @@ Start with `README.md`. For Genoa reference enrollment, read
 policy files.
 
 - `demo/` owns collection and application admission; `native_transport/`
-  authenticates the TLS peer. `profiles/` contains local demo decisions and
+  authenticates the TLS peer. `schemas/` documents application-owned records;
+  `profiles/` contains local demo decisions and
   verifier policy pins; `scripts/enroll_reference.py` checks a published
   registry entry before generating a policy.
 - The sibling `confido` repository owns evidence verification. This application

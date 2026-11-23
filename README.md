@@ -1,5 +1,14 @@
 # Confidential AI example — Confido verifier 0.2
 
+A client-side demonstration of how an application can use attestation before
+sending credentials or requests. In isolated tests, the matching case sends one
+synthetic request after evidence and TLS-peer checks; the deliberately
+mismatched reference causes the application to deny it. This demonstrates the
+decision flow, not the integrity of the application, GPU, model, or external
+inference service. See Confido's
+[security model](https://github.com/jandigitrust/confido/blob/revision/attestation-update/docs/security-model.md)
+for the underlying trust chain and terminology.
+
 A cooperating native client separates evidence verification from transport and
 application admission. `demo/collection.py` retrieves raw inputs; `confido_verifier`
 checks bytes and local policy; `native_transport/` authenticates the actual TLS
@@ -14,17 +23,24 @@ The component guides cover [`demo/`](demo/README.md),
 ```sh
 make dev-setup
 make test
-make dev-chat
-# Explicitly rebuild both wheels (dev-chat also updates stale builds):
+# Explicitly rebuild both wheels:
 make dev-update
 # Optional local container build:
 make build
+# Interactive client for a separately configured endpoint:
+make dev-chat
 ```
 
 The sibling Confido checkout defaults to `../confido/lib`; override `CONFIDO_LIB`
 if needed. Two independently hashed wheels are installed: `confido-verifier`
 0.2.0 and `confai-transport` 0.2.0. Dependencies remain pinned in requirements.lock.
 `make build` consumes those exact wheel hashes. No package publication is needed.
+
+For the current local **Genoa** demonstration, follow the
+[isolated stage command](docs/genoa-stage-reference.md). It uses actual VM
+attestation and a synthetic downstream responder. `make dev-chat` defaults to
+the original Milan public-demo profiles; their endpoints require separate
+deployment acceptance. It automatically updates stale development builds.
 
 Configure `CONFIDO_USERNAME`/`CONFIDO_PASSWORD` or a private `.credentials.json`.
 The program reads them only after verification and the pinned TLS peer check.
@@ -34,8 +50,11 @@ application-policy option. Exact attested DER, hostname and validity are checked
 by the app-owned Rust/rustls adapter on every connection; other origins and
 redirects are rejected. This adapter does not import the evidence verifier.
 
-The [profile catalog](profiles/README.md) explains each demo and Genoa stage
-policy. Application profiles contain a locally approved HTTPS origin and a
+The [profile catalog](profiles/README.md) and [application schemas](schemas/README.md)
+explain each demo policy and application decision. The Genoa stage
+policy. Genoa is the AMD EPYC processor generation of the local test VM;
+the original Milan demo uses a different generation and enrollment.
+Application profiles contain a locally approved HTTPS origin and a
 `verifier_policy` filename.
 Verifier policies contain the independently enrolled root, platform and reference.
 Match/mismatch use the same verifier code path with different local reference pins.

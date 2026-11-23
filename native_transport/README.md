@@ -15,3 +15,7 @@ From the repository root, `make dev-update` builds and installs this wheel
 alongside the Confido verifier; `make test` runs the native unit tests and
 the application test suite. The reconnect/rotated-certificate boundary is
 covered by [`tests/test_transport.py`](../tests/test_transport.py).
+
+The wheel includes the project's Apache-2.0 licence and an archive of locked
+dependency notices. The build helper prepares these before invoking maturin;
+see [third-party material](../THIRD_PARTY_NOTICES.md).

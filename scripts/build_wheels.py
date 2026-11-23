@@ -36,10 +36,21 @@ def main():
         prefix="wheel-build-", dir=ROOT / "build"
     ) as directory:
         stage = Path(directory)
-        for manifest in (
-            core / "bindings/python/Cargo.toml",
-            ROOT / "native_transport/Cargo.toml",
+        for manifest, project_root in (
+            (core / "bindings/python/Cargo.toml", core),
+            (ROOT / "native_transport/Cargo.toml", ROOT),
         ):
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(core / "scripts/prepare_attribution.py"),
+                    str(manifest),
+                    str(manifest.parent / "licenses"),
+                    "--project-root",
+                    str(project_root),
+                ],
+                check=True,
+            )
             subprocess.run(
                 [
                     args.maturin,
