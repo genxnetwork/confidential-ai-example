@@ -10,8 +10,8 @@ policy files.
   verifier policy pins; `scripts/enroll_reference.py` checks a published
   registry entry before generating a policy.
 - The sibling `confido` repository owns evidence verification. This application
-  does not publish reference values or use GA4GH ServiceInfo discovery. Keep
-  stage candidates and their limited measurement coverage clearly labeled.
+  uses the direct attestation endpoint and does not publish reference values.
+  Keep stage candidates and their limited measurement coverage clearly labeled.
 
 ## Context and private data
 
