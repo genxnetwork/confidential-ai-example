@@ -11,10 +11,12 @@ The stage candidate covers boot aggregate and kernel module IMA events. It does
 not claim to measure application, model or GPU state. The positive policy pins
 Teraveri commit `3fa7913d44a377806bd94126589be1feb362b6cb`; the negative
 policy uses the same Genoa platform enrollment with an incompatible historical
-reference. The recorded live acceptance is in
+reference. The first live acceptance is in
 `../../confido/docs/revision/acceptance-genoa-manual-20261123.md`.
-That record predates the direct report endpoint flow. Repeat the hardware
-acceptance below before claiming the current deployment has passed.
+The later direct report endpoint acceptance is in
+`../../confido/docs/revision/acceptance-genoa-direct-20261123.md`. It passed on
+isolated local ports with a synthetic downstream responder. Public deployment
+still requires its own configuration review and promotion.
 
 To regenerate the positive policy from a clean checkout at the pinned registry
 commit:
