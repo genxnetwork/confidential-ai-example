@@ -78,7 +78,14 @@ def _styled(message):
         body, separator, verdict = detail.rpartition("  ")
         if separator and verdict in ("MATCH", "MISMATCH", "UNVERIFIED"):
             kind = {"MATCH": "ok", "MISMATCH": "error", "UNVERIFIED": "warn"}[verdict]
-            detail = body + separator + color(verdict, kind)
+            return (
+                "          "
+                + color(verdict, kind)
+                + "  "
+                + color(number, "muted")
+                + "  "
+                + body
+            )
         return "          " + color(number, "muted") + "  " + detail
     if label.startswith(
         ("VERIFICATION RESULTS", "IMA entries", "Received IMA", "Legacy result")

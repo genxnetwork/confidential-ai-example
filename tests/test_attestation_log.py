@@ -109,8 +109,16 @@ class AttestationLogTests(unittest.TestCase):
                 json.dumps({"ima_measurements": trusted}).encode(),
             )
         rendered = output.getvalue()
-        self.assertIn("a" * 64 + "  \033[32mMATCH\033[0m", rendered)
-        self.assertIn("d" * 64 + "  \033[31mMISMATCH\033[0m", rendered)
+        self.assertIn(
+            "\033[32mMATCH\033[0m  \033[38;5;240m000\033[0m  "
+            "boot_aggregate  sha256:" + "a" * 64,
+            rendered,
+        )
+        self.assertIn(
+            "\033[31mMISMATCH\033[0m  \033[38;5;240m001\033[0m  "
+            "module.ko  sha256:" + "d" * 64,
+            rendered,
+        )
         self.assertFalse(any("…" in row for row in rendered.splitlines() if "sha256:" in row))
 
     def test_failed_reference_does_not_label_received_modules_as_matching(self):
