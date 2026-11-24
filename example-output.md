@@ -4,7 +4,7 @@ The block below is captured from a **historical replay** of retained hardware
 evidence at an explicitly selected evaluation time. All 47 entries are shown.
 It demonstrates formatting and evidence checks; it does not admit a live session.
 Full hashes and original input bytes remain in the private archive.
-The later [Genoa direct-endpoint acceptance](https://github.com/jandigitrust/confido/blob/revision/attestation-update/docs/revision/acceptance-genoa-direct-20261123.md)
+The later [Genoa direct-endpoint acceptance](https://github.com/jandigitrust/confido/blob/main/docs/revision/acceptance-genoa-direct-20261123.md)
 used 45 entries and is the relevant record for the current stage.
 
 ```text

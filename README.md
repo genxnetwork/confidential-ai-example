@@ -6,7 +6,7 @@ synthetic request after evidence and TLS-peer checks; the deliberately
 mismatched reference causes the application to deny it. This demonstrates the
 decision flow, not the integrity of the application, GPU, model, or external
 inference service. See Confido's
-[security model](https://github.com/jandigitrust/confido/blob/revision/attestation-update/docs/security-model.md)
+[security model](https://github.com/jandigitrust/confido/blob/main/docs/security-model.md)
 for the underlying trust chain and terminology.
 
 A cooperating native client separates evidence verification from transport and
