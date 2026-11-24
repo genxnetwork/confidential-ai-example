@@ -133,6 +133,25 @@ class AttestationLogTests(unittest.TestCase):
         self.assertIn("UNVERIFIED", next(x for x in lines if x.startswith("module ")))
         self.assertFalse(any("MATCH" in x for x in lines))
 
+    def test_module_numbers_share_a_column_for_all_verdicts(self):
+        output = Terminal()
+        with (
+            patch.object(attestation_log.sys, "stdout", output),
+            patch.dict(os.environ, {"CONFIDO_COLOR": "never"}, clear=True),
+        ):
+            for number, verdict in (
+                ("015", "MATCH"),
+                ("018", "MISMATCH"),
+                ("020", "UNVERIFIED"),
+            ):
+                attestation_log.line(f"module {number} module.ko  sha256:abc  {verdict}")
+        rows = output.getvalue().splitlines()
+        positions = [
+            row.index(number) for row, number in zip(rows, ("015", "018", "020"))
+        ]
+        self.assertEqual(positions, [17] * 3)
+        self.assertLess(rows[1].index("MISMATCH"), rows[0].index("MATCH"))
+
     def test_reference_label_and_link_are_blue(self):
         output = Terminal()
         with (

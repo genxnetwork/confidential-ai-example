@@ -78,8 +78,11 @@ def _styled(message):
         body, separator, verdict = detail.rpartition("  ")
         if separator and verdict in ("MATCH", "MISMATCH", "UNVERIFIED"):
             kind = {"MATCH": "ok", "MISMATCH": "error", "UNVERIFIED": "warn"}[verdict]
+            # Longer verdicts extend left so every module number starts in one column.
+            verdict_padding = " " * (len("UNVERIFIED") - len(verdict))
             return (
-                "          "
+                "     "
+                + verdict_padding
                 + color(verdict, kind)
                 + "  "
                 + color(number, "muted")
