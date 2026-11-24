@@ -22,8 +22,9 @@ The component guides cover [`demo/`](demo/README.md),
 
 ## Current Genoa demo
 
-From the repository root, use a sibling Confido source checkout at `../confido/lib`
-(or set `CONFIDO_LIB`), Python, Rust/Cargo, and `make`. Attestor and the Flint
+From the repository root, use the `main` branch of [JAN Confido](https://github.com/jandigitrust/confido)
+as a sibling source checkout at `../confido/lib` (or set `CONFIDO_LIB`), plus
+Python, Rust/Cargo, and `make`. Attestor and the Flint
 gateway run separately at the HTTPS origins in the application policies. The
 client needs access to AMD KDS and the GitHub API; both demo names must resolve
 to the intended HTTPS frontend from the machine running it.
@@ -53,7 +54,7 @@ checked-in Milan verifier policies. `make build` and `make chat` likewise use
 the checked-in profiles, not the ignored Genoa copies; they are separate from
 this local Genoa command. `make dev-update` explicitly rebuilds both wheels.
 
-Local wheel builds require Confido source. The Makefile uses a sibling checkout
+Local wheel builds require JAN Confido source. The Makefile uses a sibling checkout
 at `../confido/lib` by default; set `CONFIDO_LIB` only if that source is elsewhere.
 The installed client and built container do not need a Confido checkout. Two
 independently hashed wheels are installed: `confido-verifier` 0.2.0 and
