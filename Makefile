@@ -4,7 +4,8 @@ CONFIDO_LIB ?= ../confido/lib
 MATURIN ?= $(abspath $(VENV))/bin/maturin
 DOCKER ?= docker
 IMAGE ?= confidential-ai-example:0.2.0
-.PHONY: dev-setup dev-update dev-chat dev-info wheel build chat test
+GENOA_PROFILES ?= .artifacts/genoa-console-profiles
+.PHONY: dev-setup dev-update dev-chat dev-chat-genoa dev-info wheel build chat test
 $(VENV)/bin/pip:
 	$(PYTHON) -m venv $(VENV)
 dev-setup: $(VENV)/bin/pip
@@ -23,6 +24,13 @@ dev-info:
 dev-chat:
 	$(VENV)/bin/python scripts/ensure_runtime.py $(abspath $(CONFIDO_LIB))
 	CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(VENV)/bin/python confai-promter.py
+dev-chat-genoa:
+	install -d -m 0700 "$(GENOA_PROFILES)"
+	install -m 0600 profiles/match.json "$(GENOA_PROFILES)/match.json"
+	install -m 0600 profiles/mismatch.json "$(GENOA_PROFILES)/mismatch.json"
+	install -m 0600 profiles/verifier-genoa-stage-registry.json "$(GENOA_PROFILES)/verifier-match.json"
+	install -m 0600 profiles/verifier-genoa-stage-mismatch.json "$(GENOA_PROFILES)/verifier-mismatch.json"
+	CONFIDO_POLICY_DIR="$(abspath $(GENOA_PROFILES))" $(MAKE) dev-chat
 build: dev-update
 	$(DOCKER) build --platform linux/amd64 -t $(IMAGE) .
 	$(VENV)/bin/python scripts/build_manifest.py $(DOCKER) $(IMAGE)

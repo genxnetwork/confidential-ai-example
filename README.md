@@ -31,6 +31,8 @@ make dev-update
 make build
 # Interactive client for a separately configured endpoint:
 make dev-chat
+# On the configured Genoa demo VM, use the current stage references:
+make dev-chat-genoa
 ```
 
 Local wheel builds require Confido source. The Makefile uses a sibling checkout
@@ -40,16 +42,18 @@ independently hashed wheels are installed: `confido-verifier` 0.2.0 and
 `confai-transport` 0.2.0. Dependencies remain pinned in `requirements.lock`.
 `make build` consumes those exact wheel hashes. No package publication is needed.
 
-For the current local **Genoa** demonstration, follow the
-[isolated stage command](docs/genoa-stage-reference.md). It uses actual VM
+For the current local **Genoa** demonstration, `make dev-chat-genoa` prepares
+private copies of the pinned stage policies and starts the interactive client.
+The [isolated stage command](docs/genoa-stage-reference.md) uses actual VM
 attestation and a synthetic downstream responder. `make dev-chat` defaults to
 the original Milan public-demo profiles; their endpoints require separate
-deployment acceptance. It automatically updates stale development builds.
+deployment acceptance. Both interactive targets update stale development builds.
 
 `POST /tee-report` requires no application login. This client does not read or
-send an application username, password or API key. The deployed Flint `/v1`
-route currently requires Basic authentication and returns 401 to this
-credential-free client; isolated acceptance uses a synthetic downstream.
+send an application username, password or API key. On the configured demo VM,
+Flint accepts loopback `/v1` requests without Basic authentication and supplies
+its backend key server-side; remote `/v1` requests still require Basic auth.
+The isolated acceptance uses a synthetic downstream.
 Decline, collection failure, mismatched evidence and peer failure withhold the
 chat request. Bootstrap retrieval is unauthenticated; an explicit
 application-policy option permits self-signed bootstrap. The app-owned
