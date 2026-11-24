@@ -1,11 +1,14 @@
 PYTHON ?= python3
 VENV ?= .venv
-CONFIDO_LIB ?= ../confido/lib
+CONFIDO_ROOT := $(abspath .artifacts/confido-src)
+CONFIDO_LIB := $(CONFIDO_ROOT)/lib
 MATURIN ?= $(abspath $(VENV))/bin/maturin
 DOCKER ?= docker
 IMAGE ?= confidential-ai-example:0.2.0
 GENOA_PROFILES ?= .artifacts/genoa-console-profiles
-.PHONY: dev-setup dev-update dev-chat dev-chat-genoa dev-info wheel build chat test
+.PHONY: confido-source dev-setup dev-update dev-chat dev-chat-genoa dev-info wheel build chat test
+confido-source:
+	$(PYTHON) scripts/fetch_confido.py --directory "$(CONFIDO_ROOT)"
 $(VENV)/bin/pip:
 	$(PYTHON) -m venv $(VENV)
 dev-setup: $(VENV)/bin/pip
@@ -14,15 +17,15 @@ dev-setup: $(VENV)/bin/pip
 	$(MAKE) dev-update
 $(VENV)/bin/maturin: | $(VENV)/bin/pip
 	$(VENV)/bin/python -m pip install 'maturin==1.15.0' 'patchelf==0.17.2.4'
-wheel: $(VENV)/bin/maturin
-	$(VENV)/bin/python scripts/build_wheels.py --confido-lib $(abspath $(CONFIDO_LIB)) --maturin $(MATURIN)
+wheel: $(VENV)/bin/maturin confido-source
+	$(VENV)/bin/python scripts/build_wheels.py --confido-lib "$(CONFIDO_LIB)" --maturin "$(MATURIN)"
 dev-update: wheel
 	$(VENV)/bin/python scripts/install_wheels.py
 	$(MAKE) dev-info
-dev-info:
-	$(VENV)/bin/python scripts/dev_info.py $(abspath $(CONFIDO_LIB))
-dev-chat:
-	$(VENV)/bin/python scripts/ensure_runtime.py $(abspath $(CONFIDO_LIB))
+dev-info: confido-source
+	$(VENV)/bin/python scripts/dev_info.py "$(CONFIDO_LIB)"
+dev-chat: confido-source
+	$(VENV)/bin/python scripts/ensure_runtime.py "$(CONFIDO_LIB)"
 	CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(VENV)/bin/python confai-promter.py
 dev-chat-genoa:
 	install -d -m 0700 "$(GENOA_PROFILES)"

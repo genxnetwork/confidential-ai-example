@@ -8,6 +8,7 @@ unless `CONFIDO_POLICY_DIR` selects prepared Genoa policies.
 | Script | Purpose |
 | --- | --- |
 | [`source_fingerprint.py`](source_fingerprint.py) | Hashes selected application and transport source inputs. |
+| [`fetch_confido.py`](fetch_confido.py) | Fetches the pinned JAN Confido source into the ignored `.artifacts/` directory. |
 | [`build_wheels.py`](build_wheels.py), [`install_wheels.py`](install_wheels.py) | Prepare each project's licences, then build, fingerprint and install the two local wheel artifacts. |
 | [`build_manifest.py`](build_manifest.py) | Records wheel and container identity. |
 | [`dev_info.py`](dev_info.py), [`ensure_runtime.py`](ensure_runtime.py) | Inspect the loaded runtime and rebuild stale development artifacts. |

@@ -24,6 +24,7 @@ def files(root, scope):
                 "Makefile",
                 "Dockerfile",
                 "requirements.lock",
+                "confido-source.json",
             )
         ]
         dirs = [root / "demo", root / "scripts"]

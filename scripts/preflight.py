@@ -13,7 +13,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", type=Path)
     parser.add_argument("--online", action="store_true")
-    parser.add_argument("--confido-root", type=Path, default=ROOT.parent / "confido")
+    parser.add_argument("--confido-root", type=Path, default=ROOT / ".artifacts/confido-src")
     args = parser.parse_args()
     from demo.runtime import ensure_runtime
 

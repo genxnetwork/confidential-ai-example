@@ -16,7 +16,7 @@ if check.returncode:
     print(check.stderr.strip() or check.stdout.strip(), flush=True)
     print("Updating native runtime for this checkout…", flush=True)
     subprocess.run(
-        ["make", "dev-update", f"VENV={sys.prefix}", f"CONFIDO_LIB={confido_lib}"],
+        ["make", "dev-update", f"VENV={sys.prefix}"],
         cwd=root,
         check=True,
     )

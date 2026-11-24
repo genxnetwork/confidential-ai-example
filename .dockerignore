@@ -3,6 +3,7 @@
 !LICENSE
 !THIRD_PARTY_NOTICES.md
 !requirements.lock
+!confido-source.json
 !confai-promter.py
 !profiles/
 !profiles/*.json

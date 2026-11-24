@@ -10,9 +10,10 @@ policy files.
   `profiles/` contains local demo decisions and
   verifier policy pins; `scripts/enroll_reference.py` checks a published
   registry entry before generating a policy.
-- The sibling `confido` repository owns evidence verification; `attestor` owns
-  native collection and the direct report endpoint. This application does not
-  publish reference values.
+- [JAN Confido](https://github.com/jandigitrust/confido) owns evidence
+  verification; its pinned source is fetched into `.artifacts/confido-src`.
+  `attestor` owns native collection and the direct report endpoint. This
+  application does not publish reference values.
   Keep stage candidates and their limited measurement coverage clearly labeled.
 
 ## Context and private data
