@@ -76,7 +76,65 @@ class AttestationLogTests(unittest.TestCase):
         modules = [line for line in lines if line.startswith("module ")]
         self.assertEqual(len(modules), 300)
         self.assertIn("module-299.ko", modules[-1])
+        self.assertIn("a" * 64 + "  UNVERIFIED", modules[-1])
         self.assertFalse(any("PASSED" in line for line in modules))
+
+    def test_matching_and_mismatching_modules_show_full_hashes_and_verdicts(self):
+        def entry(name, digest):
+            return {
+                "name": name,
+                "PCR": 10,
+                "template_hash": "c" * 64,
+                "ima_template": "ima-ng",
+                "filedata_alg": "sha256",
+                "filedata_hash": digest,
+                "filename_hint": name,
+            }
+
+        trusted = [entry("boot_aggregate", "a" * 64), entry("module.ko", "b" * 64)]
+        observed = [trusted[0], entry("module.ko", "d" * 64)]
+        result = self.result(
+            ("reference", "passed", "pinned"),
+            ("ima_reference", "failed", "one changed module"),
+        )
+        result["checks"][-1]["reason"] = "measurement_mismatch"
+        output = Terminal()
+        with (
+            patch.object(attestation_log.sys, "stdout", output),
+            patch.dict(os.environ, {"CONFIDO_COLOR": "always"}, clear=True),
+        ):
+            attestation_log.describe_verification(
+                result,
+                {"evidence": {"ima_measurements": observed}},
+                json.dumps({"ima_measurements": trusted}).encode(),
+            )
+        rendered = output.getvalue()
+        self.assertIn("a" * 64 + "  \033[32mMATCH\033[0m", rendered)
+        self.assertIn("d" * 64 + "  \033[31mMISMATCH\033[0m", rendered)
+        self.assertFalse(any("…" in row for row in rendered.splitlines() if "sha256:" in row))
+
+    def test_failed_reference_does_not_label_received_modules_as_matching(self):
+        result = self.result(("reference", "failed", "wrong digest"))
+        lines = []
+        attestation_log.describe_verification(
+            result,
+            {"evidence": {"ima_measurements": [{"name": "module.ko"}]}},
+            json.dumps({"ima_measurements": [{"name": "module.ko"}]}),
+            emit=lines.append,
+        )
+        self.assertIn("UNVERIFIED", next(x for x in lines if x.startswith("module ")))
+        self.assertFalse(any("MATCH" in x for x in lines))
+
+    def test_reference_label_and_link_are_blue(self):
+        output = Terminal()
+        with (
+            patch.object(attestation_log.sys, "stdout", output),
+            patch.dict(os.environ, {"CONFIDO_COLOR": "always"}, clear=True),
+        ):
+            print(attestation_log.color("Reference: https://example.test", "reference"))
+        self.assertIn(
+            "\033[34mReference: https://example.test\033[0m", output.getvalue()
+        )
 
     def test_modules_precede_reference_verdict_and_summary_not_duplicated(self):
         report = {

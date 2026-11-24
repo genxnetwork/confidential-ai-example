@@ -79,7 +79,7 @@ def setup_client(endpoint):
     runtime = ensure_runtime()
     policy = load_policy(endpoint)
     print("\nATTESTATION ENDPOINT | " + policy["origin"] + "/tee-report")
-    print("Reference: " + reference_link(policy))
+    print(color("Reference: " + reference_link(policy), "reference"))
     print(
         "A quote binds the challenge, certificate and IMA log. TLS session binding is unsupported."
     )
@@ -107,7 +107,9 @@ def setup_client(endpoint):
             {"runtime": runtime, "timings": run.timings},
         )
         describe_verification(
-            result, base64.b64decode(archive["inputs"]["report"], validate=True)
+            result,
+            base64.b64decode(archive["inputs"]["report"], validate=True),
+            base64.b64decode(archive["inputs"]["reference"], validate=True),
         )
         attestation_log(f"Verification archive saved: {bundle_path}")
         if result["status"] != "verified":

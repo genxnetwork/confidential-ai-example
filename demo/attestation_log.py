@@ -11,8 +11,18 @@ _COLOR = {
     "ok": "\033[32m",
     "warn": "\033[33m",
     "error": "\033[31m",
+    "reference": "\033[34m",
     "muted": "\033[38;5;240m",
 }
+_IMA_FIELDS = (
+    "name",
+    "PCR",
+    "template_hash",
+    "ima_template",
+    "filedata_alg",
+    "filedata_hash",
+    "filename_hint",
+)
 _LABELS = {
     "endorsements": "AMD certificate chain",
     "snp_signature": "SNP report signature",
@@ -65,6 +75,10 @@ def _styled(message):
             return indent + color(word, kind) + label[len(word) :]
     if label.startswith("module "):
         number, _, detail = label[7:].partition(" ")
+        body, separator, verdict = detail.rpartition("  ")
+        if separator and verdict in ("MATCH", "MISMATCH", "UNVERIFIED"):
+            kind = {"MATCH": "ok", "MISMATCH": "error", "UNVERIFIED": "warn"}[verdict]
+            detail = body + separator + color(verdict, kind)
         return "          " + color(number, "muted") + "  " + detail
     if label.startswith(
         ("VERIFICATION RESULTS", "IMA entries", "Received IMA", "Legacy result")
@@ -99,7 +113,33 @@ def _fingerprint(values):
     return f"{len(raw):,} bytes · SHA-256 {_short(hashlib.sha256(raw).hexdigest())}"
 
 
-def describe_modules(report, emit=line, *, unverified=False):
+def _module_verdicts(result, reference, entries):
+    """Use the verifier's reference stage before comparing display-only rows."""
+    checks = {check["stage"]: check for check in result["checks"]}
+    if checks.get("reference", {}).get("status") != "passed":
+        return None
+    comparison = checks.get("ima_reference")
+    if comparison is None:
+        return None
+    if comparison["status"] == "passed":
+        return ["MATCH"] * len(entries)
+    if comparison.get("reason") != "measurement_mismatch":
+        return None
+    trusted = _json(reference).get("ima_measurements")
+    if not isinstance(trusted, list):
+        return None
+    return [
+        "MATCH"
+        if index < len(trusted)
+        and isinstance(entry, dict)
+        and isinstance(trusted[index], dict)
+        and all(entry.get(field) == trusted[index].get(field) for field in _IMA_FIELDS)
+        else "MISMATCH"
+        for index, entry in enumerate(entries)
+    ]
+
+
+def describe_modules(report, emit=line, *, verdicts=None):
     evidence = report.get("evidence", {})
     entries = evidence.get("ima_measurements", []) if isinstance(evidence, dict) else []
     if not isinstance(entries, list):
@@ -112,7 +152,7 @@ def describe_modules(report, emit=line, *, unverified=False):
     )
     label = (
         "Received IMA entries (unverified)"
-        if unverified
+        if verdicts is None
         else "IMA entries for reference comparison"
     )
     emit(
@@ -120,12 +160,14 @@ def describe_modules(report, emit=line, *, unverified=False):
     )
     width = max(3, len(str(max(0, len(entries) - 1))))
     for index, entry in enumerate(entries):
+        verdict = verdicts[index] if verdicts is not None else "UNVERIFIED"
         if not isinstance(entry, dict):
-            emit(f"module {index:0{width}d} <malformed entry>")
+            emit(f"module {index:0{width}d} <malformed entry>  {verdict}")
             continue
         emit(
             f"module {index:0{width}d} {_short(entry.get('name', '?'), 55)}  "
-            f"{_short(entry.get('filedata_alg', '?'), 16)}:{_short(entry.get('filedata_hash', '?'))}"
+            f"{_short(entry.get('filedata_alg', '?'), 16)}:{entry.get('filedata_hash', '?')}"
+            f"  {verdict}"
         )
 
 
@@ -190,7 +232,7 @@ def _context(stage, check, result, report, emit):
         )
 
 
-def describe_verification(result, report=None, emit=line):
+def describe_verification(result, report=None, reference=None, emit=line):
     """Render actual check order, inserting evidence at its relevant stage."""
     report = _json(report)
     emit("VERIFICATION RESULTS  " + format_utc(result["evaluated_at"]))
@@ -207,10 +249,15 @@ def describe_verification(result, report=None, emit=line):
             "Legacy result: combined stages; replay inputs to obtain the current detailed checks"
         )
     modules_shown = False
+    evidence = report.get("evidence", {})
+    entries = evidence.get("ima_measurements", []) if isinstance(evidence, dict) else []
+    verdicts = (
+        _module_verdicts(result, reference, entries) if isinstance(entries, list) else None
+    )
     for check in result["checks"]:
         stage = check["stage"]
         if stage in ("ima_reference", "measurements"):
-            describe_modules(report, emit, unverified=check["status"] != "passed")
+            describe_modules(report, emit, verdicts=verdicts)
             modules_shown = True
         label = _LABELS.get(stage, stage)
         emit(
@@ -224,4 +271,4 @@ def describe_verification(result, report=None, emit=line):
                 "          Received context cannot be displayed; verifier result is shown above"
             )
     if not modules_shown:
-        describe_modules(report, emit, unverified=True)
+        describe_modules(report, emit)

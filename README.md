@@ -50,9 +50,9 @@ the original Milan public-demo profiles; their endpoints require separate
 deployment acceptance. Both interactive targets update stale development builds.
 
 `POST /tee-report` requires no application login. This client does not read or
-send an application username, password or API key. On the configured demo VM,
-Flint accepts loopback `/v1` requests without Basic authentication and supplies
-its backend key server-side; remote `/v1` requests still require Basic auth.
+send an application username, password or API key. Flint accepts `/v1/models`
+and `/v1/chat/completions` without Basic authentication from any VM and supplies
+its backend key server-side. Other gateway routes keep their existing access rules.
 The isolated acceptance uses a synthetic downstream.
 Decline, collection failure, mismatched evidence and peer failure withhold the
 chat request. Bootstrap retrieval is unauthenticated; an explicit
@@ -103,10 +103,11 @@ Builds whose sources change mid-build are rejected before publishing a manifest.
 
 Caller collection events have real UTC timestamps; completed verifier stages are
 printed in their returned order without invented per-stage timestamps. All IMA
-entries appear immediately before the IMA comparison verdict, with compact hashes.
-An early failure still shows the received entries, explicitly unverified. The
-archive retains full values. Successful labels use ANSI green 32; endpoint details
-use dark gray. `CONFIDO_COLOR=always|auto|never` controls terminal color.
+entries appear immediately before the IMA comparison verdict, with full file
+hashes and per-entry `MATCH` or `MISMATCH` labels when the pinned reference has
+been checked. An early failure still shows the received entries as `UNVERIFIED`.
+The archive retains full values. Successful labels use ANSI green 32; reference
+links are blue. `CONFIDO_COLOR=always|auto|never` controls terminal color.
 
 The final summary separates evidence verification from application admission.
 The 120-second monotonic challenge deadline is checked again after rendering and

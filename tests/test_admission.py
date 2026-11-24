@@ -27,7 +27,11 @@ class AdmissionTests(unittest.TestCase):
         }
 
     def live_run(self, record):
-        return Mock(result=record, archive={"inputs": {"report": "e30="}}, timings={})
+        return Mock(
+            result=record,
+            archive={"inputs": {"report": "e30=", "reference": "e30="}},
+            timings={},
+        )
 
     def run_setup(self, answer, record=None):
         record = record or self.record
