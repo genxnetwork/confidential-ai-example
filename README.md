@@ -1,7 +1,7 @@
 # Confidential AI example — Confido verifier 0.2
 
 A client-side demonstration of how an application can use attestation before
-sending credentials or requests. In isolated tests, the matching case sends one
+sending an application request. In isolated tests, the matching case sends one
 synthetic request after evidence and TLS-peer checks; the deliberately
 mismatched reference causes the application to deny it. This demonstrates the
 decision flow, not the integrity of the application, GPU, model, or external
@@ -13,7 +13,7 @@ A cooperating native client separates evidence verification from transport and
 application admission. `demo/collection.py` retrieves raw inputs; `confido_verifier`
 checks bytes and local policy; `native_transport/` authenticates the actual TLS
 peer; `demo/admission.py` checks the attestation endpoint over that TLS connection
-before credentials are read.
+before the chat client is opened.
 The sibling [Attestor](https://github.com/jandigitrust/attestor) checkout provides
 native evidence collection and `POST /tee-report`.
 The component guides cover [`demo/`](demo/README.md),
@@ -33,9 +33,11 @@ make build
 make dev-chat
 ```
 
-The sibling Confido checkout defaults to `../confido/lib`; override `CONFIDO_LIB`
-if needed. Two independently hashed wheels are installed: `confido-verifier`
-0.2.0 and `confai-transport` 0.2.0. Dependencies remain pinned in requirements.lock.
+Local wheel builds require Confido source. The Makefile uses a sibling checkout
+at `../confido/lib` by default; set `CONFIDO_LIB` only if that source is elsewhere.
+The installed client and built container do not need a Confido checkout. Two
+independently hashed wheels are installed: `confido-verifier` 0.2.0 and
+`confai-transport` 0.2.0. Dependencies remain pinned in `requirements.lock`.
 `make build` consumes those exact wheel hashes. No package publication is needed.
 
 For the current local **Genoa** demonstration, follow the
@@ -44,13 +46,13 @@ attestation and a synthetic downstream responder. `make dev-chat` defaults to
 the original Milan public-demo profiles; their endpoints require separate
 deployment acceptance. It automatically updates stale development builds.
 
-Configure `CONFIDO_USERNAME`/`CONFIDO_PASSWORD` or a private `.credentials.json`.
-The program reads them only after verification and the pinned TLS peer check.
-Decline, collection failure, mismatched evidence and peer failure withhold chat.
-Bootstrap retrieval is credentialless; self-signed bootstrap is an explicit native
-application-policy option. Exact attested DER, hostname and validity are checked
-by the app-owned Rust/rustls adapter on every connection; other origins and
-redirects are rejected. This adapter does not import the evidence verifier.
+The current demo endpoint requires no application username, password or API key.
+Decline, collection failure, mismatched evidence and peer failure withhold the
+chat request. Bootstrap retrieval is unauthenticated; an explicit
+application-policy option permits self-signed bootstrap. The app-owned
+Rust/rustls adapter checks the attested certificate's exact DER, hostname and
+validity on every connection; other origins and redirects are rejected. This
+adapter does not import the evidence verifier.
 
 The [profile catalog](profiles/README.md) and [application schemas](schemas/README.md)
 explain each demo policy and application decision. Genoa is the AMD EPYC
@@ -71,8 +73,8 @@ The generic verifier accepts policy bytes supplied by its caller and does not
 choose these trust pins.
 The caller sends a nonce directly to `POST /tee-report`; no metadata discovery
 selects the report endpoint or a reference. After evidence appraisal, a
-credentialless `HEAD /tee-report` over quote-bound certificate-pinned TLS
-authenticates the intended peer before application credentials are read.
+unauthenticated `HEAD /tee-report` over quote-bound certificate-pinned TLS
+authenticates the intended peer before the application sends a request.
 The run directory holds a v2 verification archive, `.runtime.json` with build metadata
 and collection/verification timings, and a separate `.decision.json`;
 only the latter contains `application_admitted`.
@@ -102,4 +104,4 @@ use dark gray. `CONFIDO_COLOR=always|auto|never` controls terminal color.
 The final summary separates evidence verification from application admission.
 The 120-second monotonic challenge deadline is checked again after rendering and
 the pinned TLS peer check. A live run is one-use; loading an old archive cannot
-restore it. An expired run or a failed TLS peer never releases credentials.
+restore it. An expired run or a failed TLS peer never opens chat.

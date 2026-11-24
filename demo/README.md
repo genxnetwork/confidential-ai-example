@@ -2,8 +2,8 @@
 
 This package owns the example application's collection, presentation, TLS
 transport, and admission decision. Confido verifies evidence bytes; the
-application decides whether to use an appraised endpoint and when credentials
-may be read. Start the interactive flow with `make dev-chat` from the
+application decides whether to use an appraised endpoint and when a chat request
+may be sent. Start the interactive flow with `make dev-chat` from the
 repository root.
 
 | Module | Role |

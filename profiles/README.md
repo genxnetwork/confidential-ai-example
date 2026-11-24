@@ -19,13 +19,18 @@ repositories are checked out side by side.
 | [platform-genoa-stage.json](platform-genoa-stage.json) | Observed Genoa stage platform enrollment used when generating a verifier policy. It is not a vendor certification. |
 | [reference-issuers-stage.json](reference-issuers-stage.json) | Local issuer decision for the Teraveri stage manifest. The current accepted `GENXT-manual` key and manifest are pinned here; the `GENXT` Actions/OIDC entry is a future path, not a completed endorsement. |
 | [verifier-genoa-stage-registry.json](verifier-genoa-stage-registry.json) | Positive Genoa stage policy generated from the approved registry entry at a full commit and content digest. |
-| [verifier-genoa-stage-mismatch.json](verifier-genoa-stage-mismatch.json) | Negative Genoa stage policy with the same platform constraints and an incompatible historical reference. |
+| [verifier-genoa-stage-mismatch.json](verifier-genoa-stage-mismatch.json) | Negative Genoa stage policy with the same platform constraints and a pinned Teraveri test fixture whose `nf_tables.ko` and `bridge.ko` file digests differ. The fixture is not an endorsed enrollment. |
 
 The Milan pair and Genoa stage pair are distinct enrollments. A file named
 `match` means it is intended to match its enrolled reference, not that any
 future host or workload is approved. The stage reference covers a boot
 aggregate and enrolled kernel modules; it does not cover application code,
 models, GPU state, or external inference.
+
+The Genoa mismatch fixture keeps the positive reference's entry count, order,
+boot aggregate, template hashes and PCR 10 value. Only two module file digests
+change, so the negative run exercises the IMA comparison instead of a platform
+or reference-format failure.
 
 The application policy uses schema version **2** and points to a verifier
 policy with schema version **2**. Both use evidence profile

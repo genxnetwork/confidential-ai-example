@@ -27,7 +27,7 @@ build: dev-update
 	$(DOCKER) build --platform linux/amd64 -t $(IMAGE) .
 	$(VENV)/bin/python scripts/build_manifest.py $(DOCKER) $(IMAGE)
 chat:
-	$(DOCKER) run --rm --platform linux/amd64 -it --env CONFIDO_USERNAME --env CONFIDO_PASSWORD --env CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(IMAGE)
+	$(DOCKER) run --rm --platform linux/amd64 -it --env CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(IMAGE)
 test:
 	$(VENV)/bin/python -m unittest discover -s tests -v
 	cargo test --locked --manifest-path native_transport/Cargo.toml

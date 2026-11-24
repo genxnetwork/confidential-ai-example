@@ -43,20 +43,17 @@ class AdmissionTests(unittest.TestCase):
             ) as connect,
             patch.object(demo.admission, "authenticate", return_value=session),
             patch.object(demo, "new_bundle_path", return_value=Path(path) / "run.json"),
-            patch.object(
-                demo, "read_credentials", return_value=("test", "sentinel")
-            ) as credentials,
             patch.object(demo.openai, "OpenAI") as app,
             patch("builtins.input", return_value=answer),
             patch("builtins.print"),
         ):
             demo.setup_client("match")
-            return connect.call_count, credentials.call_count, app.call_count
+            return connect.call_count, app.call_count
 
-    def test_decline_never_appraises_or_reads_credentials(self):
-        self.assertEqual(self.run_setup("n"), (0, 0, 0))
+    def test_decline_never_appraises_or_opens_chat(self):
+        self.assertEqual(self.run_setup("n"), (0, 0))
 
-    def test_each_failure_withholds_application_and_credentials(self):
+    def test_each_failure_withholds_application_requests(self):
         for reason in [
             "measurement_mismatch",
             "quote_binding_invalid",
@@ -64,13 +61,13 @@ class AdmissionTests(unittest.TestCase):
             "collection_unavailable",
         ]:
             self.record["reason"] = reason
-            self.assertEqual(self.run_setup("y"), (1, 0, 0))
+            self.assertEqual(self.run_setup("y"), (1, 0))
 
-    def test_enter_accepts_and_credentials_follow_admission(self):
+    def test_enter_accepts_and_chat_follows_admission(self):
         self.record.update(status="verified", reason="reference_match")
-        self.assertEqual(self.run_setup(""), (1, 1, 1))
+        self.assertEqual(self.run_setup(""), (1, 1))
 
-    def test_peer_failure_withholds_credentials(self):
+    def test_peer_failure_withholds_chat(self):
         self.record.update(status="verified", reason="reference_match")
         with (
             tempfile.TemporaryDirectory() as path,
@@ -85,12 +82,12 @@ class AdmissionTests(unittest.TestCase):
                 demo.admission, "authenticate", side_effect=ValueError("wrong peer")
             ),
             patch.object(demo, "new_bundle_path", return_value=Path(path) / "run.json"),
-            patch.object(demo, "read_credentials") as credentials,
+            patch.object(demo.openai, "OpenAI") as app,
             patch("builtins.input", return_value=""),
             patch("builtins.print"),
         ):
             self.assertIsNone(demo.setup_client("match"))
-            credentials.assert_not_called()
+            app.assert_not_called()
             self.assertFalse(
                 json.loads((Path(path) / "run.decision.json").read_text())[
                     "application_admitted"
@@ -108,12 +105,12 @@ class AdmissionTests(unittest.TestCase):
                 demo.setup_client("match")
             collect.assert_not_called()
 
-    def test_expiry_after_rendering_withholds_credentials(self):
+    def test_expiry_after_rendering_withholds_chat(self):
         self.record.update(status="verified", reason="reference_match")
         run = self.live_run(self.record)
         run.consume.side_effect = ValueError("Challenge deadline expired")
         with patch.object(self, "live_run", return_value=run):
-            self.assertEqual(self.run_setup(""), (1, 0, 0))
+            self.assertEqual(self.run_setup(""), (1, 0))
 
     def test_sdk_uses_scoped_transport_without_hidden_requests(self):
         session = Mock()
@@ -138,11 +135,10 @@ class AdmissionTests(unittest.TestCase):
         )
         http = demo.httpx.Client(
             transport=demo.AppraisedTransport(session),
-            auth=("test", "sentinel"),
             follow_redirects=False,
         )
         app = demo.openai.OpenAI(
-            api_key="null",
+            api_key=demo.SDK_PLACEHOLDER_API_KEY,
             base_url="https://localhost/v1",
             http_client=http,
             max_retries=0,
@@ -157,7 +153,18 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(
             session.request.call_args.args[1], "https://localhost/v1/chat/completions"
         )
+        self.assertFalse(
+            any(name.lower() == "authorization" for name, _ in session.request.call_args.args[2])
+        )
         app.close()
+
+    def test_transport_rejects_unexpected_application_authorization(self):
+        session = Mock()
+        http = demo.httpx.Client(transport=demo.AppraisedTransport(session))
+        with self.assertRaisesRegex(ValueError, "does not accept application credentials"):
+            http.get("https://localhost/v1/models", headers={"Authorization": "Bearer secret"})
+        session.request.assert_not_called()
+        http.close()
 
 
 if __name__ == "__main__":

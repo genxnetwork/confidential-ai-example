@@ -1,7 +1,6 @@
 """Point-in-time evidence appraisal before a cooperating client opens chat."""
 
 import base64
-import json
 import os
 import uuid
 from datetime import datetime, timezone
@@ -20,7 +19,7 @@ from demo.attestation_log import (
     log as attestation_log,
 )
 from demo.runtime import ensure_runtime
-from demo.transport import AppraisedTransport
+from demo.transport import AppraisedTransport, SDK_PLACEHOLDER_API_KEY
 
 POLICY_DIR = Path(
     os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles"))
@@ -38,22 +37,6 @@ def load_policy(endpoint):
 def reference_link(policy):
     ref = policy["verifier"]["reference"]
     return f"https://github.com/{ref['repository']}/blob/{ref['commit']}/{ref['path']}"
-
-
-def read_credentials():
-    path = Path(
-        os.environ.get(
-            "CONFIDO_CREDENTIALS_FILE", Path(__file__).with_name(".credentials.json")
-        )
-    )
-    credentials = json.loads(path.read_text()) if path.exists() else {}
-    username = os.environ.get("CONFIDO_USERNAME") or credentials.get("username")
-    password = os.environ.get("CONFIDO_PASSWORD") or credentials.get("password")
-    if not username or not password:
-        raise ValueError(
-            "Set CONFIDO_USERNAME/CONFIDO_PASSWORD or provide a local .credentials.json file"
-        )
-    return username, password
 
 
 def new_bundle_path(endpoint):
@@ -137,7 +120,7 @@ def setup_client(endpoint):
                 },
             )
             show_result(result, reason=result["reason"])
-            print("Chat was not opened. No application request or credential was sent.")
+            print("Chat was not opened. No application request was sent.")
             return None
         attestation_log(
             "Authenticating the HTTPS peer against the quote-bound certificate"
@@ -145,15 +128,15 @@ def setup_client(endpoint):
         session = admission.authenticate(policy, result, run=run)
         attestation_log("HTTPS peer and attestation endpoint authenticated")
         run.consume(policy, result)
-        credentials = read_credentials()
         http_client = httpx.Client(
             transport=AppraisedTransport(session),
-            auth=credentials,
             follow_redirects=False,
             timeout=30.0,
         )
+        # The SDK requires an API-key value; the scoped transport drops this
+        # placeholder Authorization header before sending a request.
         client = openai.OpenAI(
-            api_key="null",
+            api_key=SDK_PLACEHOLDER_API_KEY,
             base_url=f"{policy['origin']}/v1",
             http_client=http_client,
             max_retries=0,

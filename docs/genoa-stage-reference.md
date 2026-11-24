@@ -13,8 +13,10 @@ trusted issuers on its own.
 The stage candidate covers boot aggregate and kernel module IMA events. It does
 not claim to measure application, model or GPU state. The positive policy pins
 Teraveri commit `3fa7913d44a377806bd94126589be1feb362b6cb`; the negative
-policy uses the same Genoa platform enrollment with an incompatible historical
-reference. The first live acceptance is in
+policy pins an unendorsed test fixture at commit
+`8462ca8808d85395397d847fae6446d380a1320c`. That fixture changes the
+`filedata_hash` of two Genoa kernel modules and keeps the same platform
+enrollment. The first live acceptance is in
 `../../confido/docs/revision/acceptance-genoa-manual-20261123.md`.
 The later direct report endpoint acceptance is in
 `../../confido/docs/revision/acceptance-genoa-direct-20261123.md`. It passed on

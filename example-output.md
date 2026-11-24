@@ -102,4 +102,4 @@ Application/model files and GPU state are outside this measurement coverage.
 
 For mismatched evidence the final result is `POLICY_MISMATCH` and `DENIED`.
 For valid evidence with an expired nonce or wrong TLS peer, evidence remains
-`VERIFIED` while the application is `DENIED`; credentials are not read.
+`VERIFIED` while the application is `DENIED`; no chat request is sent.

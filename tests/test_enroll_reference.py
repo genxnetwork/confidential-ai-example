@@ -213,6 +213,8 @@ class EnrollmentTests(unittest.TestCase):
             (ROOT / "profiles/verifier-genoa-stage-mismatch.json").read_text()
         )
         self.assertEqual(negative["platform"], self.platform)
+        self.assertEqual(negative["reference"]["repository"], "teraveri/reference-value-registry")
+        self.assertIn("two-module-mismatch", negative["reference"]["path"])
         self.assertNotEqual(
             negative["reference"]["sha256"], hashlib.sha256(self.reference).hexdigest()
         )

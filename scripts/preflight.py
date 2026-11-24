@@ -34,7 +34,7 @@ def main():
         run.consume(policy, result)
         print(json.dumps(result, indent=2))
         print("PASS: compatible report and intended HTTPS peer")
-    print("Client check complete; no application credential or inference request sent.")
+    print("Client check complete; no inference request sent.")
 
 
 if __name__ == "__main__":
