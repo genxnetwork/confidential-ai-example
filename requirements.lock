@@ -1,7 +1,7 @@
 #
-# Hash-locked for CPython 3.10 on the Ubuntu x86_64 demo target.
+# Hash-locked for CPython 3.10 on Ubuntu x86_64 and CPython 3.13 on macOS ARM64.
 # The original pip-compile lock was extended with the enrollment dependency
-# and hashes of its downloaded wheels.
+# and hashes of the selected platform wheels.
 #
 annotated-types==0.8.0 \
     --hash=sha256:13b2beaad985e05e2d6407ee4c4f35590b11f8d693a258a561055cac8f64cab7 \
@@ -15,7 +15,8 @@ anyio==4.15.1 \
     #   httpx2
     #   openai
 cffi==2.1.1 \
-    --hash=sha256:194cffa889098ced9976c3fc6340305e43f6303657d298da55366907c05c22d6
+    --hash=sha256:194cffa889098ced9976c3fc6340305e43f6303657d298da55366907c05c22d6 \
+    --hash=sha256:19ee6127ee34de7d83ce3d371ebc5ed91addbdcc39f9ab15ce4eb35a4e534971
     # via cryptography
 certifi==2026.7.22 \
     --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
@@ -24,7 +25,9 @@ certifi==2026.7.22 \
     #   httpcore
     #   httpx
 cryptography==50.0.2 \
-    --hash=sha256:1981f1db4630889b9ef7803fadef12b056f428cb6b85c27ba57b774793b6093c
+    --hash=sha256:1981f1db4630889b9ef7803fadef12b056f428cb6b85c27ba57b774793b6093c \
+    --hash=sha256:fa8f5efb344d6908a1ce62f4a24e2e5780f825d6f53f5f50ec5ffacac72936cb \
+    --hash=sha256:0ec5f09541743261e66e291b4a0cbf0fb2997aeaab6d9e9c740b9dba1b58d1c2
     # via -r requirements.in
 exceptiongroup==1.3.1 \
     --hash=sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219 \

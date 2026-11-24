@@ -181,7 +181,6 @@ struct Session {
     runtime: tokio::runtime::Runtime,
     client: AppraisedClient,
 }
-// PyO3 0.20 expands this attribute into non-local impls with newer rustc.
 #[pymethods]
 impl Session {
     #[new]
@@ -227,7 +226,7 @@ impl Session {
                     .map_err(|e| e.to_string())
             })
             .map_err(error)?;
-        Ok((status, headers, PyBytes::new(py, &bytes).into()))
+        Ok((status, headers, PyBytes::new_bound(py, &bytes).unbind()))
     }
 }
 #[pyfunction]
@@ -246,7 +245,7 @@ fn build_info() -> std::collections::HashMap<String, String> {
     .collect()
 }
 #[pymodule]
-fn _confai_transport(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn _confai_transport(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(build_info, m)?)?;
     m.add_class::<Session>()?;
