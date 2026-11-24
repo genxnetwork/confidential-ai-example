@@ -41,14 +41,10 @@ the current stage uses only the key and manifest explicitly pinned to
 a successful OIDC publication. If that workflow becomes available, verify its
 bundle, update this application's issuer decision and rerun the acceptance.
 
-Run isolated positive/negative hardware acceptance from this checkout:
-
-```sh
-.venv/bin/python scripts/stage_demo.py \
-  --out /private/new-genoa-stage-run \
-  --match-verifier-policy profiles/verifier-genoa-stage-registry.json \
-  --mismatch-verifier-policy profiles/verifier-genoa-stage-mismatch.json
-```
-
-This script starts a synthetic downstream responder on isolated local ports;
-it does not change the public listeners or evaluate external inference.
+The [Attestor deployment guide](https://github.com/jandigitrust/attestor/blob/main/deploy/README.md)
+explains how its operator starts an isolated collector on `127.0.0.1:18001`
+with a certificate for `localhost`. For positive/negative hardware acceptance,
+use [Attestor's optional integration harness](https://github.com/jandigitrust/attestor/blob/main/integration/README.md)
+with this client's pinned policies. The harness manages a temporary HTTPS
+frontend and synthetic downstream responder on isolated local ports; it does
+not manage Attestor or evaluate external inference.

@@ -13,6 +13,7 @@ repositories are checked out side by side.
 
 | Files | Purpose |
 | --- | --- |
+| [extension-origins.json](extension-origins.json) | Client-side browser extension origin allowlist for the demo; it is not a server routing configuration. |
 | [match.json](match.json), [mismatch.json](mismatch.json) | Milan demo application policies: HTTPS origin, verifier-policy filename, and explicit untrusted bootstrap option. |
 | [verifier-match.json](verifier-match.json), [verifier-mismatch.json](verifier-mismatch.json) | Matching and deliberately incompatible Milan reference pins for those two application policies. |
 | [platform-genoa-stage.json](platform-genoa-stage.json) | Observed Genoa stage platform enrollment used when generating a verifier policy. It is not a vendor certification. |

@@ -5,13 +5,14 @@ Start with `README.md`. For Genoa reference enrollment, read
 `docs/genoa-stage-reference.md` and `profiles/README.md` before the relevant
 policy files.
 
-- `demo/` owns collection and application admission; `native_transport/`
+- `demo/` owns report retrieval and application admission; `native_transport/`
   authenticates the TLS peer. `schemas/` documents application-owned records;
   `profiles/` contains local demo decisions and
   verifier policy pins; `scripts/enroll_reference.py` checks a published
   registry entry before generating a policy.
-- The sibling `confido` repository owns evidence verification. This application
-  uses the direct attestation endpoint and does not publish reference values.
+- The sibling `confido` repository owns evidence verification; `attestor` owns
+  native collection and the direct report endpoint. This application does not
+  publish reference values.
   Keep stage candidates and their limited measurement coverage clearly labeled.
 
 ## Context and private data

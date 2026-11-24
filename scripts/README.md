@@ -1,7 +1,7 @@
 # Example support scripts
 
-These scripts support local builds, deployment checks, reference enrollment,
-and explicit acceptance runs. The interactive application is started from
+These scripts support local client builds, reference enrollment, and explicit
+client checks. The interactive application is started from
 the repository root with `make dev-chat`.
 
 | Script | Purpose |
@@ -11,10 +11,11 @@ the repository root with `make dev-chat`.
 | [`build_manifest.py`](build_manifest.py) | Records wheel and container identity. |
 | [`dev_info.py`](dev_info.py), [`ensure_runtime.py`](ensure_runtime.py) | Inspect the loaded runtime and rebuild stale development artifacts. |
 | [`enroll_reference.py`](enroll_reference.py) | Verify a registry publisher statement and emit a locally pinned verifier policy. |
-| [`preflight.py`](preflight.py) | Read-only check of deployment configuration and installed packages. |
-| [`stage_demo.py`](stage_demo.py), [`container_acceptance.py`](container_acceptance.py) | Isolated hardware-backed and container acceptance flows. |
+| [`preflight.py`](preflight.py) | Check the installed client and optionally its external attestation endpoint. |
+| [`container_acceptance.py`](container_acceptance.py) | Exercise the client inside a prepared container against an external endpoint. |
 | [`browser_live_checks.py`](browser_live_checks.py) | Opt-in live browser-extension check against the public demo endpoint. |
 
 The [root README](../README.md) covers development commands. The
 [Genoa stage guide](../docs/genoa-stage-reference.md) documents the pinned
-reference enrollment and isolated acceptance command.
+reference enrollment. The optional isolated acceptance harness lives in
+[Attestor](https://github.com/jandigitrust/attestor/tree/main/integration).

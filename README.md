@@ -14,6 +14,8 @@ application admission. `demo/collection.py` retrieves raw inputs; `confido_verif
 checks bytes and local policy; `native_transport/` authenticates the actual TLS
 peer; `demo/admission.py` checks the attestation endpoint over that TLS connection
 before credentials are read.
+The sibling [Attestor](https://github.com/jandigitrust/attestor) checkout provides
+native evidence collection and `POST /tee-report`.
 The component guides cover [`demo/`](demo/README.md),
 [`native_transport/`](native_transport/README.md),
 [`scripts/`](scripts/README.md), and [`tests/`](tests/README.md).
@@ -51,8 +53,8 @@ by the app-owned Rust/rustls adapter on every connection; other origins and
 redirects are rejected. This adapter does not import the evidence verifier.
 
 The [profile catalog](profiles/README.md) and [application schemas](schemas/README.md)
-explain each demo policy and application decision. The Genoa stage
-policy. Genoa is the AMD EPYC processor generation of the local test VM;
+explain each demo policy and application decision. Genoa is the AMD EPYC
+processor generation of the local test VM;
 the original Milan demo uses a different generation and enrollment.
 Application profiles contain a locally approved HTTPS origin and a
 `verifier_policy` filename.
@@ -62,9 +64,11 @@ This repository owns these demo policies. The Genoa stage enrollment inputs and
 positive/negative policies also live under `profiles/`; `scripts/enroll_reference.py`
 verifies the registry publisher statement and emits a pinned verifier policy.
 The reference bytes and publisher statements remain in their own registries.
-The GENXT routing and browser-extension host configuration is under
-`deploy/genxt-demo/`. The generic verifier accepts policy bytes supplied by its
-caller and does not choose these trust pins.
+The browser extension's approved demo origins are in
+[`profiles/extension-origins.json`](profiles/extension-origins.json). The GENXT
+Nginx routing is maintained by [Flint](https://github.com/genxnetwork/flint).
+The generic verifier accepts policy bytes supplied by its caller and does not
+choose these trust pins.
 The caller sends a nonce directly to `POST /tee-report`; no metadata discovery
 selects the report endpoint or a reference. After evidence appraisal, a
 credentialless `HEAD /tee-report` over quote-bound certificate-pinned TLS

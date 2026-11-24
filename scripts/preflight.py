@@ -1,7 +1,6 @@
-"""Read-only deployment preflight; never sends credentials or inference requests."""
+"""Check the installed client and, optionally, its external attestation endpoint."""
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -15,9 +14,6 @@ def main():
     parser.add_argument("--policy", type=Path)
     parser.add_argument("--online", action="store_true")
     parser.add_argument("--confido-root", type=Path, default=ROOT.parent / "confido")
-    parser.add_argument(
-        "--flint", type=Path, help="Optionally compare a deployment Nginx configuration"
-    )
     args = parser.parse_args()
     from demo.runtime import ensure_runtime
 
@@ -26,22 +22,6 @@ def main():
         "PASS: installed verifier and transport pipeline "
         + str(runtime["pipeline_revision"])
     )
-    canonical = (ROOT / "deploy/genxt-demo/nginx.conf").read_bytes()
-    if canonical.count(b"location = /tee-report") != 2:
-        raise SystemExit(
-            "FAIL: demo routing must expose only the direct attestation endpoint"
-        )
-    if args.flint and (args.flint / "nginx/flint.conf").read_bytes() != canonical:
-        raise SystemExit(
-            "FAIL: deployment Nginx routing differs from the application template"
-        )
-    print(
-        "PASS: direct attestation routing; sha256="
-        + hashlib.sha256(canonical).hexdigest()
-    )
-    if not (ROOT / "deploy/genxt-demo/systemd-confido.service").is_file():
-        raise SystemExit("FAIL: demo collector unit missing")
-    print("PASS: demo collector unit available")
     if args.online:
         if not args.policy:
             parser.error("--online requires --policy")
@@ -50,15 +30,11 @@ def main():
         policy = collection.load_policy(args.policy)
         run = collection.collect_and_verify(policy)
         result = run.result
-        session = admission.authenticate(policy, result, run=run)
+        admission.authenticate(policy, result, run=run)
         run.consume(policy, result)
         print(json.dumps(result, indent=2))
-        for path, expected in [("/aTLS", 404)]:
-            status, _, _ = session.request("GET", policy["origin"] + path, [], b"")
-            if status != expected:
-                raise SystemExit(f"FAIL: retired route {path}: HTTP {status}")
-        print("PASS: compatible report, intended HTTPS peer and retired /aTLS route")
-    print("Preflight complete; no application credential or inference request sent.")
+        print("PASS: compatible report and intended HTTPS peer")
+    print("Client check complete; no application credential or inference request sent.")
 
 
 if __name__ == "__main__":
