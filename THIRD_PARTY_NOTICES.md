@@ -13,3 +13,9 @@ The Python dependency set is pinned in `requirements.lock`; installed
 distributions carry their own licence metadata. Review the final wheel and
 container inventories before public distribution. These collected files document
 upstream terms; they do not establish ownership or licence compatibility.
+
+The macOS transport graph includes `system-configuration` and
+`system-configuration-sys`. Their published crates declare `MIT OR Apache-2.0`
+but omit standalone licence files. The reviewed supplements in `third_party/`
+record the Apache-2.0 option and bind the notices to the published crate
+revisions before packaging.

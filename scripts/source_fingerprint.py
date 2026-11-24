@@ -15,7 +15,9 @@ def files(root, scope):
             if (base / name).is_file()
         ]
         paths += [root / "scripts/source_fingerprint.py"]
-        dirs = [base / "src"]
+        supplement_dir = root / "third_party"
+        paths += [p for p in supplement_dir.rglob("*") if p.is_file()]
+        dirs = [base / "src", supplement_dir]
     elif scope == "application":
         paths = [
             root / name
