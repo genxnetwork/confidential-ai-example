@@ -1,6 +1,6 @@
 # Application JSON schemas
 
-These JSON Schema Draft 2020-12 files describe records owned by the Confidential AI example. They are separate from [Confido's verifier contracts](https://github.com/jandigitrust/confido/tree/revision/attestation-update/schemas).
+These JSON Schema Draft 2020-12 files describe records owned by the Confidential AI example. They are separate from [Confido's verifier contracts](https://github.com/jandigitrust/confido/tree/main/schemas).
 
 | Schema | Purpose |
 | --- | --- |

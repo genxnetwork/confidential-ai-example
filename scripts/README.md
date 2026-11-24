@@ -1,8 +1,9 @@
 # Example support scripts
 
 These scripts support local client builds, reference enrollment, and explicit
-client checks. The interactive application is started from
-the repository root with `make dev-chat`.
+client checks. Start the current Genoa console from the repository root with
+`make dev-chat-genoa`; plain `make dev-chat` uses the checked-in Milan policies
+unless `CONFIDO_POLICY_DIR` selects prepared Genoa policies.
 
 | Script | Purpose |
 | --- | --- |

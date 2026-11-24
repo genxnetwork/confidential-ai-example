@@ -20,20 +20,33 @@ The component guides cover [`demo/`](demo/README.md),
 [`native_transport/`](native_transport/README.md),
 [`scripts/`](scripts/README.md), and [`tests/`](tests/README.md).
 
-## Local development
+## Current Genoa demo
+
+From the repository root, use a sibling Confido source checkout at `../confido/lib`
+(or set `CONFIDO_LIB`), Python, Rust/Cargo, and `make`. Attestor and the Flint
+gateway run separately at the HTTPS origins in the application policies. The
+client needs access to AMD KDS and the GitHub API; both demo names must resolve
+to the intended HTTPS frontend from the machine running it.
 
 ```sh
 make dev-setup
 make test
-# Explicitly rebuild both wheels:
-make dev-update
-# Optional local container build:
-make build
-# Interactive client for a separately configured endpoint:
-make dev-chat
-# On the configured Genoa demo VM, use the current stage references:
 make dev-chat-genoa
 ```
+
+`make dev-chat-genoa` copies the two application policies and their Genoa
+verifier policies into the ignored `.artifacts/genoa-console-profiles/` directory,
+then runs the interactive client. Once those copies exist, this is equivalent:
+
+```sh
+CONFIDO_POLICY_DIR="$PWD/.artifacts/genoa-console-profiles" make dev-chat
+```
+
+Use `make dev-chat-genoa` again after editing a source policy so the private
+copies are refreshed. Without `CONFIDO_POLICY_DIR`, `make dev-chat` loads the
+checked-in Milan verifier policies. `make build` and `make chat` likewise use
+the checked-in profiles, not the ignored Genoa copies; they are separate from
+this local Genoa command. `make dev-update` explicitly rebuilds both wheels.
 
 Local wheel builds require Confido source. The Makefile uses a sibling checkout
 at `../confido/lib` by default; set `CONFIDO_LIB` only if that source is elsewhere.
@@ -42,12 +55,9 @@ independently hashed wheels are installed: `confido-verifier` 0.2.0 and
 `confai-transport` 0.2.0. Dependencies remain pinned in `requirements.lock`.
 `make build` consumes those exact wheel hashes. No package publication is needed.
 
-For the current local **Genoa** demonstration, `make dev-chat-genoa` prepares
-private copies of the pinned stage policies and starts the interactive client.
-The [isolated stage command](docs/genoa-stage-reference.md) uses actual VM
-attestation and a synthetic downstream responder. `make dev-chat` defaults to
-the original Milan public-demo profiles; their endpoints require separate
-deployment acceptance. Both interactive targets update stale development builds.
+The [Genoa stage guide](docs/genoa-stage-reference.md) explains reference
+enrollment and earlier isolated acceptance with a synthetic downstream. Both
+interactive targets update stale development builds before starting the client.
 
 `POST /tee-report` requires no application login. This client does not read or
 send an application username, password or API key. Flint accepts `/v1/models`
@@ -63,23 +73,30 @@ adapter does not import the evidence verifier.
 
 The [profile catalog](profiles/README.md) and [application schemas](schemas/README.md)
 explain each demo policy and application decision. Genoa is the AMD EPYC
-processor generation of the local test VM;
-the original Milan demo uses a different generation and enrollment.
+processor generation of the local test VM; the original Milan demo uses a
+different generation and enrollment.
 Application profiles contain a locally approved HTTPS origin and a
 `verifier_policy` filename.
 Verifier policies contain the independently enrolled root, platform and reference.
 Match/mismatch use the same verifier code path with different local reference pins.
 This repository owns these demo policies. The Genoa stage enrollment inputs and
 positive/negative policies also live under `profiles/`; `scripts/enroll_reference.py`
-verifies the registry publisher statement and emits a pinned verifier policy.
-The reference bytes and publisher statements remain in their own registries.
+checks the GENXT publisher statement before emitting a pinned positive policy.
+The positive reference is a stage candidate in the
+[Teraveri registry](https://github.com/teraveri/reference-value-registry); the
+negative reference is an unendorsed fixture there, not an alternative trusted
+baseline. During each run the application downloads the exact `reference.json`
+at the policy's full Git commit; Confido checks its SHA-256 and measurements.
+The publisher statement is checked at enrollment, not rechecked on each run.
+Neither a registry update nor a new branch tip changes an existing pin. If the
+pinned file cannot be retrieved, the application withholds chat.
 The browser extension's approved demo origins are in
 [`profiles/extension-origins.json`](profiles/extension-origins.json). The GENXT
 Nginx routing is maintained by [Flint](https://github.com/genxnetwork/flint).
 The generic verifier accepts policy bytes supplied by its caller and does not
 choose these trust pins.
 The caller sends a nonce directly to `POST /tee-report`; no metadata discovery
-selects the report endpoint or a reference. After evidence appraisal, a
+selects the report endpoint or a reference. After evidence appraisal, an
 unauthenticated `HEAD /tee-report` over quote-bound certificate-pinned TLS
 authenticates the intended peer before the application sends a request.
 The run directory holds a v2 verification archive, `.runtime.json` with build metadata

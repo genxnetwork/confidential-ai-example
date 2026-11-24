@@ -3,8 +3,9 @@
 This package owns the example application's collection, presentation, TLS
 transport, and admission decision. Confido verifies evidence bytes; the
 application decides whether to use an appraised endpoint and when a chat request
-may be sent. Start the interactive flow with `make dev-chat` from the
-repository root.
+may be sent. Start the current Genoa flow with `make dev-chat-genoa` from the
+repository root. Plain `make dev-chat` uses the checked-in Milan policies unless
+`CONFIDO_POLICY_DIR` points to prepared Genoa policies.
 
 | Module | Role |
 | --- | --- |

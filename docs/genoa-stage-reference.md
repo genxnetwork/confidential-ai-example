@@ -24,8 +24,8 @@ isolated local ports with a synthetic downstream responder, including a
 rebuilt local container match/mismatch run. Public deployment still requires
 its own configuration review and promotion.
 
-To regenerate the positive policy from a clean checkout at the pinned registry
-commit:
+To regenerate the positive policy using the public registry at the pinned
+commit, without a local registry checkout:
 
 ```sh
 python3 scripts/enroll_reference.py \
@@ -33,15 +33,19 @@ python3 scripts/enroll_reference.py \
   --commit 3fa7913d44a377806bd94126589be1feb362b6cb \
   --entry entries/azure-snp-vtpm-ima-1/azure-genoa-ubuntu2204-kernel-1071-stage \
   --issuer GENXT-manual \
-  --registry-dir ../reference-value-registry \
   --output profiles/verifier-genoa-stage-registry.json
 ```
 
-The GENXT Actions OIDC publisher path is still blocked by its required CI job;
-the current stage uses only the key and manifest explicitly pinned to
-`GENXT-manual`. Do not treat the presence of the unused `GENXT` issuer entry as
-a successful OIDC publication. If that workflow becomes available, verify its
-bundle, update this application's issuer decision and rerun the acceptance.
+For offline enrollment, `--registry-dir ../reference-value-registry` is also
+supported when that checkout is clean and checked out at the exact pinned
+commit. This command verifies the publisher statement once; live runs fetch
+the pinned `reference.json` and verify its digest, but do not repeat publisher
+authentication.
+
+The current stage pin uses only the key and manifest explicitly approved under
+`GENXT-manual`. The separate `GENXT` Actions/OIDC issuer entry does not endorse
+this manifest. Using an Actions publication requires verifying its bundle,
+updating this application's issuer decision and rerunning acceptance.
 
 The [Attestor deployment guide](https://github.com/jandigitrust/attestor/blob/main/deploy/README.md)
 explains how its operator starts an isolated collector on `127.0.0.1:18001`
