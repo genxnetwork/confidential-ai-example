@@ -25,7 +25,7 @@ The Milan pair and Genoa stage pair are distinct enrollments. A file named
 `match` means it is intended to match its enrolled reference, not that any
 future host or workload is approved. The stage reference covers a boot
 aggregate and enrolled kernel modules; it does not cover application code,
-models, GPU state, or external inference.
+models, GPU state, or inference output.
 
 The Genoa mismatch fixture keeps the positive reference's entry count, order,
 boot aggregate, template hashes and PCR 10 value. Only two module file digests

@@ -17,7 +17,7 @@ expected = sys.argv[2] == "true"
 assert (client is not None) == expected
 if client:
     result = client.chat.completions.create(
-        model="llama-default",
+        model=demo.CHAT_MODEL,
         messages=[{"role": "user", "content": "Synthetic container admission test."}],
     )
     assert result.choices[0].message.content.startswith("Synthetic")

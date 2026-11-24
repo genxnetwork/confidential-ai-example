@@ -28,6 +28,7 @@ ENDPOINTS = {
     "match": "match.demo.genxt.network",
     "mismatch": "mismatch.demo.genxt.network",
 }
+CHAT_MODEL = "tinyllama-1.1b-chat-v1.0"
 
 
 def load_policy(endpoint):
@@ -168,7 +169,10 @@ def setup_client(endpoint):
         },
     )
     show_result(result, admitted=True)
-    print("Inference: Azure-hosted inference is outside the appraised VM.")
+    print(
+        "Inference: TinyLlama runs on the GENXT VM; its model and runtime are "
+        "outside the measured IMA reference."
+    )
     return client
 
 
@@ -208,7 +212,7 @@ def chat_loop(client):
         try:
             # Get completion from the model
             completion = client.chat.completions.create(
-                model="llama-default", messages=conversation
+                model=CHAT_MODEL, messages=conversation
             )
 
             # Extract and print the response

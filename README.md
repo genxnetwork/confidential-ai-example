@@ -4,8 +4,8 @@ A client-side demonstration of how an application can use attestation before
 sending an application request. In isolated tests, the matching case sends one
 synthetic request after evidence and TLS-peer checks; the deliberately
 mismatched reference causes the application to deny it. This demonstrates the
-decision flow, not the integrity of the application, GPU, model, or external
-inference service. See Confido's
+decision flow, not the integrity of the application, GPU, model, or inference
+runtime. See Confido's
 [security model](https://github.com/jandigitrust/confido/blob/main/docs/security-model.md)
 for the underlying trust chain and terminology.
 
@@ -27,6 +27,11 @@ From the repository root, use a sibling Confido source checkout at `../confido/l
 gateway run separately at the HTTPS origins in the application policies. The
 client needs access to AMD KDS and the GitHub API; both demo names must resolve
 to the intended HTTPS frontend from the machine running it.
+After admission, chat requests use Flint's `tinyllama-1.1b-chat-v1.0` alias.
+Flint runs the corresponding TinyLlama-1.1B-Chat-v1.0 model locally on the
+GENXT VM, behind the appraised HTTPS endpoint. The client does not run or
+download model weights. The [Flint deployment](https://github.com/genxnetwork/flint)
+pins the model conversion and runtime image.
 
 ```sh
 make dev-setup
@@ -105,7 +110,8 @@ only the latter contains `application_admitted`.
 
 The quote binds nonce, certificate and IMA log. There is no TLS session binder or
 relay-resistance claim. Coverage is enrolled boot aggregate/kernel modules;
-application/model/GPU state and external Azure inference are outside that coverage.
+application/model/GPU state, including the local TinyLlama weights and runtime,
+are outside that coverage. Local inference does not attest the model or output.
 The browser extension in the Confido repository performs evidence checks entirely
 in WASM and does not use this transport or send chat prompts.
 

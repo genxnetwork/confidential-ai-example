@@ -53,4 +53,4 @@ with a certificate for `localhost`. For positive/negative hardware acceptance,
 use [Attestor's optional integration harness](https://github.com/jandigitrust/attestor/blob/main/integration/README.md)
 with this client's pinned policies. The harness manages a temporary HTTPS
 frontend and synthetic downstream responder on isolated local ports; it does
-not manage Attestor or evaluate external inference.
+not manage Attestor or evaluate model integrity or inference output.

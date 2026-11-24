@@ -126,7 +126,7 @@ class AdmissionTests(unittest.TestCase):
                     "id": "test",
                     "object": "chat.completion",
                     "created": 0,
-                    "model": "llama-default",
+                    "model": "tinyllama-1.1b-chat-v1.0",
                     "choices": [
                         {
                             "index": 0,
@@ -149,7 +149,7 @@ class AdmissionTests(unittest.TestCase):
         )
         self.assertEqual(session.request.call_count, 0)
         response = app.chat.completions.create(
-            model="llama-default",
+            model=demo.CHAT_MODEL,
             messages=[{"role": "user", "content": "synthetic transport test"}],
         )
         self.assertEqual(response.choices[0].message.content, "ok")
