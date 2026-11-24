@@ -46,7 +46,10 @@ attestation and a synthetic downstream responder. `make dev-chat` defaults to
 the original Milan public-demo profiles; their endpoints require separate
 deployment acceptance. It automatically updates stale development builds.
 
-The current demo endpoint requires no application username, password or API key.
+`POST /tee-report` requires no application login. This client does not read or
+send an application username, password or API key. The deployed Flint `/v1`
+route currently requires Basic authentication and returns 401 to this
+credential-free client; isolated acceptance uses a synthetic downstream.
 Decline, collection failure, mismatched evidence and peer failure withhold the
 chat request. Bootstrap retrieval is unauthenticated; an explicit
 application-policy option permits self-signed bootstrap. The app-owned
