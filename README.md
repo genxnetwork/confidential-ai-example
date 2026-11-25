@@ -169,6 +169,9 @@ fields. If the browser retained an old account label, sign out on the provider's
 page and sign in again after correcting the profile. Local demo logoff only
 clears the application's token cache. See Microsoft's
 [user profile attributes](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-user-attributes).
+The [automatic naming contract](docs/entra-display-name.md) describes the required
+registration-side change and its pending tenant configuration. Rebuilding the
+demo does not update Entra directory profiles.
 
 ## Developer checks
 
