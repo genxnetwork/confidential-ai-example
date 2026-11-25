@@ -19,11 +19,11 @@ class RuntimeTests(unittest.TestCase):
         (self.root / "build/wheels").mkdir(parents=True)
         self.modules = {}
         self.manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "pipeline_revision": 2,
-            "confido_root": str(self.root),
+            "verifier_distribution": "confido-verifier==0.2.0",
             "sources": {
-                x: x + "-source" for x in ("core", "python", "transport", "application")
+                x: x + "-source" for x in ("transport", "application")
             },
             "artifacts": {},
         }
@@ -57,6 +57,9 @@ class RuntimeTests(unittest.TestCase):
                 __file__=str(binary), build_info=lambda info=info: info
             )
         (self.root / "build/runtime.json").write_text(json.dumps(self.manifest))
+        (self.root / "confido-wheel.json").write_text(
+            '{"distribution":"confido-verifier","version":"0.2.0"}'
+        )
 
     def check(self, sources=None, packaged=False):
         sources = sources or self.manifest["sources"]
@@ -92,7 +95,7 @@ class RuntimeTests(unittest.TestCase):
                 self.check(packaged=packaged)
 
     def test_old_manifest_wheel_and_binary_do_not_hide_changed_sources(self):
-        for scope in ("core", "python", "transport", "application"):
+        for scope in ("transport", "application"):
             sources = dict(self.manifest["sources"])
             sources[scope] = "changed source"
             with self.assertRaisesRegex(RuntimeError, "sources"):
@@ -112,6 +115,8 @@ class RuntimeTests(unittest.TestCase):
 
         with (
             patch.object(build, "ROOT", self.root),
+            patch.object(build, "verifier_version", return_value="0.2.0"),
+            patch.object(build, "check_verifier_wheel"),
             patch.object(
                 build,
                 "source_digest",
@@ -123,13 +128,14 @@ class RuntimeTests(unittest.TestCase):
                 "argv",
                 [
                     "build_wheels.py",
-                    "--confido-lib",
-                    str(self.root / "lib"),
+                    "--verifier-wheel",
+                    str(self.root / "confido_verifier-0.2.0-test.whl"),
                     "--maturin",
                     "maturin",
                 ],
             ),
             self.assertRaisesRegex(RuntimeError, "Sources changed during build"),
         ):
+            (self.root / "confido_verifier-0.2.0-test.whl").write_bytes(b"wheel")
             build.main()
         self.assertEqual((self.root / "build/runtime.json").read_bytes(), before)

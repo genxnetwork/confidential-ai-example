@@ -24,11 +24,11 @@ def source_digest(root, scope):
     return output.splitlines()[0]
 
 
-def ensure_runtime(confido_lib=None):
+def ensure_runtime():
     try:
         manifest = json.loads((ROOT / "build/runtime.json").read_bytes())
         if (
-            manifest["schema_version"] != 1
+            manifest["schema_version"] != 2
             or manifest["pipeline_revision"] != PIPELINE_REVISION
         ):
             raise ValueError("Unsupported runtime manifest/pipeline")
@@ -49,29 +49,19 @@ def ensure_runtime(confido_lib=None):
             infos[name] = info
         if infos["confido-verifier"]["core"]["pipeline_revision"] != PIPELINE_REVISION:
             raise ValueError("Verifier pipeline is incompatible with this caller")
+        pin = json.loads((ROOT / "confido-wheel.json").read_text())
+        if manifest["verifier_distribution"] != f"confido-verifier=={pin['version']}":
+            raise ValueError("Verifier distribution differs from pin")
+        for part in ("core", "wrapper"):
+            if infos["confido-verifier"][part]["version"] != pin["version"]:
+                raise ValueError("Loaded verifier version differs from pin")
         if source_digest(ROOT, "application") != manifest["sources"]["application"]:
             raise ValueError("Caller sources differ from runtime manifest")
         if os.environ.get("CONFIDO_RUNTIME_MODE") != "packaged":
-            core_root = (
-                Path(confido_lib).resolve().parent
-                if confido_lib
-                else Path(manifest["confido_root"])
-            )
-            actual = {
-                "core": source_digest(core_root, "core"),
-                "python": source_digest(core_root, "python"),
-                "transport": source_digest(ROOT, "transport"),
-            }
-            for scope, digest in actual.items():
-                if digest != manifest["sources"][scope]:
-                    raise ValueError(f"{scope} sources changed since wheel build")
-            if (
-                infos["confido-verifier"]["core"]["source_sha256"] != actual["core"]
-                or infos["confido-verifier"]["wrapper"]["source_sha256"]
-                != actual["python"]
-            ):
-                raise ValueError("Verifier embedded sources differ from checkout")
-            if infos["confai-transport"]["source_sha256"] != actual["transport"]:
+            transport = source_digest(ROOT, "transport")
+            if transport != manifest["sources"]["transport"]:
+                raise ValueError("Transport sources changed since wheel build")
+            if infos["confai-transport"]["source_sha256"] != transport:
                 raise ValueError("Transport embedded sources differ from checkout")
             for item in manifest["artifacts"].values():
                 if (

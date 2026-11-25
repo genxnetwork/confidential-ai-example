@@ -12,7 +12,7 @@ RUN cd /wheels && sha256sum -c wheel.sha256 \
     && python3 -m pip install --no-index --no-deps /wheels/*.whl \
     && python3 -c 'import confido_verifier, _confai_transport; assert confido_verifier.__version__ == _confai_transport.__version__ == "0.2.0"' \
     && rm -rf /wheels
-COPY confai-promter.py Makefile Dockerfile confido-source.json /app/
+COPY confai-promter.py Makefile Dockerfile confido-wheel.json /app/
 COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 COPY build/runtime.json /app/build/runtime.json
 COPY demo /app/demo
