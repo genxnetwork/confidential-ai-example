@@ -8,6 +8,17 @@ from demo.transport import ChatTransport
 
 
 class ChatTransportTests(unittest.TestCase):
+    def test_native_runtime_error_becomes_safe_transport_failure_without_retry(self):
+        calls = []
+        def fail(request):
+            calls.append(request)
+            raise RuntimeError("synthetic-private-native-error")
+        with httpx.Client(transport=ChatTransport(httpx.MockTransport(fail), "user-token")) as client:
+            with self.assertRaises(httpx.TransportError) as caught:
+                client.get("https://example.test/v1/models", headers={"Authorization": "Bearer user-token"})
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("synthetic-private-native-error", str(caught.exception))
+
     def test_token_and_route_gate_precedes_peer_transport(self):
         forwarded = []
 

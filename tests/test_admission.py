@@ -312,6 +312,26 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn("Sign-in expired", output.getvalue())
         self.assertNotIn("synthetic-private-server-body", output.getvalue())
 
+    def test_chat_bounds_generated_tokens_and_shows_native_failure_safely(self):
+        requests = []
+        def respond(request):
+            requests.append(json.loads(request.content))
+            raise RuntimeError("synthetic-private-native-error")
+        with demo.openai.OpenAI(
+            api_key="synthetic-token", base_url="https://example.test/v1", max_retries=0,
+            http_client=httpx.Client(transport=demo.ChatTransport(
+                httpx.MockTransport(respond), "synthetic-token"), trust_env=False),
+        ) as client:
+            output = io.StringIO()
+            with patch("builtins.input", side_effect=["how are you?", "quit"]), contextlib.redirect_stdout(output):
+                demo.chat_loop(client)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0]["max_tokens"], 16)
+        self.assertIn("Generating", output.getvalue())
+        self.assertIn("Connection failed or timed out", output.getvalue())
+        self.assertNotIn("RuntimeError", output.getvalue())
+        self.assertNotIn("synthetic-private-native-error", output.getvalue())
+
     def test_failed_logoff_returns_safe_failure_without_starting_another_login(self):
         auth = synthetic_session("synthetic-access", float("inf"), "user")
         errors = io.StringIO()

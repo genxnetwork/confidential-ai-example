@@ -29,6 +29,8 @@ POLICY_DIR = Path(
     os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles"))
 )
 CHAT_MODEL = "tinyllama-1.1b-chat-v1.0"
+CHAT_MAX_TOKENS = 16
+SYSTEM_PROMPT = "You are a helpful assistant. Answer in one short sentence."
 
 
 def safe_error_message(error):
@@ -44,7 +46,7 @@ def safe_error_message(error):
     if isinstance(error, (openai.APITimeoutError, httpx.TimeoutException)):
         return "Request timed out. The remote outcome may be unknown."
     if isinstance(error, (openai.APIConnectionError, httpx.TransportError)):
-        return "Connection failed. The remote outcome may be unknown."
+        return "Connection failed or timed out. The remote outcome may be unknown."
     return f"Operation failed ({type(error).__name__})."
 
 
@@ -213,7 +215,7 @@ def setup_client(endpoint, auth, *, runtime=None):
     )
     show_result(result, admitted=True)
     print(
-        "Inference: TinyLlama runs on the GENXT VM; its model and runtime are "
+        "Inference: TinyLlama runs on the TEE VM; its model and runtime are "
         "outside the measured IMA reference."
     )
     return client
@@ -221,7 +223,7 @@ def setup_client(endpoint, auth, *, runtime=None):
 
 def chat_loop(client):
     """Run a chat session, then return to endpoint selection."""
-    conversation = [{"role": "system", "content": "You are a helpful assistant."}]
+    conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     print("\nWelcome to the Interactive Chat!")
     print("Type 'exit' or 'quit' to return to endpoint selection")
@@ -237,7 +239,7 @@ def chat_loop(client):
 
         if user_input.lower() == "clear":
             conversation = [
-                {"role": "system", "content": "You are a helpful assistant."}
+                {"role": "system", "content": SYSTEM_PROMPT}
             ]
             print("\nConversation cleared!")
             continue
@@ -248,12 +250,15 @@ def chat_loop(client):
         conversation.append({"role": "user", "content": user_input})
 
         try:
+            print("\nGenerating a short response...", flush=True)
             completion = client.chat.completions.create(
-                model=CHAT_MODEL, messages=conversation
+                model=CHAT_MODEL, messages=conversation, max_tokens=CHAT_MAX_TOKENS
             )
 
             assistant_response = completion.choices[0].message.content
             print("\nAssistant:", assistant_response)
+            if completion.choices[0].finish_reason == "length":
+                print("Reply reached this CPU demo's short-response limit.")
 
             conversation.append({"role": "assistant", "content": assistant_response})
 

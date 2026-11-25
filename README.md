@@ -104,6 +104,12 @@ peer, then creates an OpenAI client using Confido's transport. Only the admitted
 A mismatch or failed peer check withholds chat. Flint serves the
 `tinyllama-1.1b-chat-v1.0` model alias on the VM; no model weights run on the client.
 
+TinyLlama runs on the TEE VM using CPU inference. Demo replies are capped at
+16 generated tokens and use a one-sentence prompt to fit the current Confido
+transport's 30-second request budget. The console shows when generation starts;
+responses are buffered, not streamed. Long prompts or a busy VM can still time
+out. A transport failure does not trigger an automatic inference retry.
+
 The stage policies cover enrolled boot aggregate and kernel modules. They do
 not measure application/model/GPU integrity, attest inference output, or provide
 TLS session binding and relay resistance. Verification archives and separate
