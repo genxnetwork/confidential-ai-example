@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import openai
 
-from demo import admission, collection
+from demo import admission, collection, identity
 from demo.attestation_log import (
     color,
     describe_verification,
@@ -90,6 +90,11 @@ def setup_client(endpoint):
     if answer not in ("", "y", "yes"):
         print("Chat was not opened.")
         return None
+    try:
+        access_token = identity.sign_in()
+    except Exception:
+        print("Email sign-in failed. No application request was sent.")
+        return None
     bundle_path = new_bundle_path(endpoint)
     result = None
     print(
@@ -132,7 +137,7 @@ def setup_client(endpoint):
         attestation_log("HTTPS peer and attestation endpoint authenticated")
         run.consume(policy, result)
         http_client = httpx.Client(
-            transport=AppraisedTransport(session),
+            transport=AppraisedTransport(session, access_token),
             follow_redirects=False,
             timeout=30.0,
         )
@@ -222,6 +227,9 @@ def chat_loop(client):
             # Add assistant's response to conversation history
             conversation.append({"role": "assistant", "content": assistant_response})
 
+        except openai.AuthenticationError:
+            print("\nSign-in expired or was rejected. Start a new attestation and sign in again.")
+            return
         # Keep an admitted chat session usable after one failed API call.
         except Exception as e:  # noqa: BLE001
             print(f"\nError: {e!s}")

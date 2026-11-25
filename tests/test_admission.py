@@ -46,6 +46,7 @@ class AdmissionTests(unittest.TestCase):
                 return_value=self.live_run(record),
             ) as connect,
             patch.object(demo.admission, "authenticate", return_value=session),
+            patch.object(demo.identity, "sign_in", return_value="test-access-token"),
             patch.object(demo, "new_bundle_path", return_value=Path(path) / "run.json"),
             patch.object(demo.openai, "OpenAI") as app,
             patch("builtins.input", return_value=answer),
@@ -71,6 +72,19 @@ class AdmissionTests(unittest.TestCase):
         self.record.update(status="verified", reason="reference_match")
         self.assertEqual(self.run_setup(""), (1, 1))
 
+    def test_sign_in_failure_withholds_evidence_and_chat_requests(self):
+        with (
+            patch.object(demo, "ensure_runtime", return_value={}),
+            patch.object(demo.identity, "sign_in", side_effect=RuntimeError("unavailable")),
+            patch.object(demo.collection, "collect_and_verify") as collect,
+            patch.object(demo.openai, "OpenAI") as app,
+            patch("builtins.input", return_value=""),
+            patch("builtins.print"),
+        ):
+            self.assertIsNone(demo.setup_client("match"))
+            collect.assert_not_called()
+            app.assert_not_called()
+
     def test_peer_failure_withholds_chat(self):
         self.record.update(status="verified", reason="reference_match")
         with (
@@ -85,6 +99,7 @@ class AdmissionTests(unittest.TestCase):
             patch.object(
                 demo.admission, "authenticate", side_effect=ValueError("wrong peer")
             ),
+            patch.object(demo.identity, "sign_in", return_value="test-access-token"),
             patch.object(demo, "new_bundle_path", return_value=Path(path) / "run.json"),
             patch.object(demo.openai, "OpenAI") as app,
             patch("builtins.input", return_value=""),
@@ -138,7 +153,7 @@ class AdmissionTests(unittest.TestCase):
             ).encode(),
         )
         http = demo.httpx.Client(
-            transport=demo.AppraisedTransport(session),
+            transport=demo.AppraisedTransport(session, "synthetic-user-token"),
             follow_redirects=False,
         )
         app = demo.openai.OpenAI(
@@ -157,15 +172,16 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(
             session.request.call_args.args[1], "https://localhost/v1/chat/completions"
         )
-        self.assertFalse(
-            any(name.lower() == "authorization" for name, _ in session.request.call_args.args[2])
+        self.assertIn(
+            ("authorization", "Bearer synthetic-user-token"),
+            session.request.call_args.args[2],
         )
         app.close()
 
     def test_transport_rejects_unexpected_application_authorization(self):
         session = Mock()
-        http = demo.httpx.Client(transport=demo.AppraisedTransport(session))
-        with self.assertRaisesRegex(ValueError, "does not accept application credentials"):
+        http = demo.httpx.Client(transport=demo.AppraisedTransport(session, "synthetic-user-token"))
+        with self.assertRaisesRegex(ValueError, "Unexpected application authorization header"):
             http.get("https://localhost/v1/models", headers={"Authorization": "Bearer secret"})
         session.request.assert_not_called()
         http.close()

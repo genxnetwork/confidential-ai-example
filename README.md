@@ -69,13 +69,19 @@ The [Genoa stage guide](docs/genoa-stage-reference.md) explains reference
 enrollment and earlier isolated acceptance with a synthetic downstream. Both
 interactive targets update stale development builds before starting the client.
 
-`POST /tee-report` requires no application login. This client does not read or
-send an application username, password or API key. Flint accepts `/v1/models`
-and `/v1/chat/completions` without Basic authentication from any VM and supplies
-its backend key server-side. Other gateway routes keep their existing access rules.
+`POST /tee-report` requires no application login. Before retrieval, the console
+opens Teraveri Identity's email-OTP sign-in in the system browser, using a public
+client and Authorization Code with PKCE. The access token stays in process memory.
+After evidence and TLS-peer checks, the scoped transport sends it only to the
+appraised `/v1/models` and `/v1/chat/completions` routes. Flint validates the
+token at its HTTPS gateway and supplies its separate backend key server-side.
+The client never reads an application password or backend API key. Other gateway
+routes keep their existing access rules. Local port 8765 must be available for
+the browser callback.
 The isolated acceptance uses a synthetic downstream.
-Decline, collection failure, mismatched evidence and peer failure withhold the
-chat request. Bootstrap retrieval is unauthenticated; an explicit
+Decline, sign-in failure, collection failure, mismatched evidence and peer failure
+withhold the chat request. A mismatch sends no user access token to the demo VM.
+Bootstrap retrieval is unauthenticated; an explicit
 application-policy option permits self-signed bootstrap. The app-owned
 Rust/rustls adapter checks the attested certificate's exact DER, hostname and
 validity on every connection; other origins and redirects are rejected. This
