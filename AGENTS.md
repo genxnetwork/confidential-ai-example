@@ -11,7 +11,7 @@ policy files.
   verifier policy pins; `scripts/enroll_reference.py` checks a published
   registry entry before generating a policy.
 - [JAN Confido](https://github.com/jandigitrust/confido) owns evidence
-  verification; its pinned source is fetched into `.artifacts/confido-src`.
+  verification; this example installs its released verifier wheel.
   `attestor` owns native collection and the direct report endpoint. This
   application does not publish reference values.
   Keep stage candidates and their limited measurement coverage clearly labeled.

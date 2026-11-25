@@ -22,10 +22,10 @@ The component guides cover [`demo/`](demo/README.md),
 
 ## Current Genoa demo
 
-From the repository root, use Python, Rust/Cargo, Git, and `make`. `make dev-setup`
-fetches the reviewed [JAN Confido](https://github.com/jandigitrust/confido)
-source at the commit in [`confido-source.json`](confido-source.json) and builds
-the verifier wheel. No sibling Confido checkout is required. Attestor and the Flint
+From the repository root, use Python, Rust/Cargo, and `make`. `make dev-setup`
+downloads the published [JAN Confido](https://github.com/jandigitrust/confido)
+`confido-verifier` wheel at the version in [`confido-wheel.json`](confido-wheel.json)
+and builds only this application's transport wheel. Attestor and the Flint
 gateway run separately at the HTTPS origins in the application policies. The
 client needs access to AMD KDS and the GitHub API; both demo names must resolve
 to the intended HTTPS frontend from the machine running it.
@@ -53,17 +53,19 @@ Use `make dev-chat-genoa` again after editing a source policy so the private
 copies are refreshed. Without `CONFIDO_POLICY_DIR`, `make dev-chat` loads the
 checked-in Milan verifier policies. `make build` and `make chat` likewise use
 the checked-in profiles, not the ignored Genoa copies; they are separate from
-this local Genoa command. `make dev-update` explicitly rebuilds both wheels.
+this local Genoa command. `make dev-update` refreshes the verifier wheel and
+rebuilds the transport wheel.
 
-The pinned Confido source is cached under the ignored `.artifacts/confido-src/`.
-The first build needs GitHub access; later source checks reuse the clean checkout
-without another Git fetch. Cargo may need network access if its dependency cache
-is empty. Updating Confido requires reviewing and changing the full commit
-in `confido-source.json`, then rebuilding with `make dev-update`. The installed
-client and built container do not need the source checkout. Two
-independently hashed wheels are installed: `confido-verifier` 0.2.0 and
-`confai-transport` 0.2.0. Dependencies remain pinned in `requirements.lock`.
-`make build` consumes those exact wheel hashes. No package publication is needed.
+The first build needs access to PyPI for a compatible published
+`confido-verifier==0.2.0` wheel; it never builds Confido from source. Cargo may
+need network access if its dependency cache is empty. To update Confido, review
+the published release and change `confido-wheel.json`, then run
+`make dev-update`. For offline use, pass `CONFIDO_WHEEL=/path/to/released.whl`
+to `make dev-update`; its distribution metadata and embedded version must match
+the pin. The exact downloaded wheel and locally built
+`confai-transport` 0.2.0 wheel are hashed in `build/wheel.sha256` and checked
+against the loaded native binaries. Dependencies remain pinned in
+`requirements.lock`. `make build` consumes those exact wheel hashes.
 
 The [Genoa stage guide](docs/genoa-stage-reference.md) explains reference
 enrollment and earlier isolated acceptance with a synthetic downstream. Both
@@ -130,11 +132,12 @@ in WASM and does not use this transport or send chat prompts.
 
 ## Runtime and attestation output
 
-`make dev-chat` checks current sources, local wheel hashes and the **loaded native
-binary**, then rebuilds and reinstalls stale artifacts in the selected `VENV`.
+`make dev-chat` checks the application and transport sources, local wheel
+hashes and the **loaded native binaries**, then downloads/rebuilds and reinstalls
+stale artifacts in the selected `VENV`.
 A package version alone does not establish compatibility. `make dev-info` checks
 this relationship explicitly; the runtime requires verifier pipeline revision 2.
-Containers use an embedded runtime manifest and need no sibling source checkout.
+Containers use an embedded runtime manifest and need no Confido source checkout.
 Builds whose sources change mid-build are rejected before publishing a manifest.
 
 Caller collection events have real UTC timestamps; completed verifier stages are

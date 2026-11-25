@@ -8,7 +8,7 @@ from demo.runtime import ensure_runtime
 
 if __name__ == "__main__":
     try:
-        info = ensure_runtime(sys.argv[1] if len(sys.argv) > 1 else None)
+        info = ensure_runtime()
     except RuntimeError as error:
         raise SystemExit(str(error))
     print("Runtime verified; pipeline", info["pipeline_revision"])
