@@ -38,7 +38,9 @@ build: dev-update
 	$(DOCKER) build --platform linux/amd64 -t $(IMAGE) .
 	$(VENV)/bin/python scripts/build_manifest.py $(DOCKER) $(IMAGE)
 chat:
-	$(DOCKER) run --rm --platform linux/amd64 -it --env CONFIDO_COLOR=$${CONFIDO_COLOR:-always} $(IMAGE)
+	$(DOCKER) run --rm --platform linux/amd64 -it -p 127.0.0.1:8765:8765 \
+		--env CONFIDO_COLOR=$${CONFIDO_COLOR:-always} \
+		--env CONFIDO_AUTH_CALLBACK_BIND=0.0.0.0 $(IMAGE)
 test:
 	$(VENV)/bin/python -m unittest discover -s tests -v
 	cargo test --locked --manifest-path native_transport/Cargo.toml

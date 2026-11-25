@@ -1,6 +1,7 @@
 """Interactive email-OTP sign-in for the public desktop client."""
 
 import base64
+import os
 import secrets
 import threading
 import time
@@ -59,8 +60,11 @@ def sign_in():
         def log_message(self, *_args):
             pass
 
+    bind = os.environ.get("CONFIDO_AUTH_CALLBACK_BIND", "127.0.0.1")
+    if bind not in ("127.0.0.1", "0.0.0.0"):
+        raise RuntimeError("Unsupported sign-in callback bind address")
     try:
-        server = HTTPServer(("127.0.0.1", 8765), Callback)
+        server = HTTPServer((bind, 8765), Callback)
     except OSError as exc:
         raise RuntimeError("Local sign-in port 8765 is unavailable") from exc
     server.timeout = 1
@@ -75,9 +79,11 @@ def sign_in():
         "code_challenge_method": "S256",
     })
     try:
-        if not webbrowser.open(endpoints["authorization_endpoint"] + "?" + query):
-            raise RuntimeError("Could not open a browser for sign-in")
-        print("Complete email sign-in in your browser.")
+        url = endpoints["authorization_endpoint"] + "?" + query
+        if webbrowser.open(url):
+            print("Complete email sign-in in your browser.")
+        else:
+            print("Open this sign-in URL in a browser on this machine: " + url)
         deadline = time.monotonic() + 180
         while not received.is_set() and time.monotonic() < deadline:
             server.handle_request()

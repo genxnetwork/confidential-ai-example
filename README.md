@@ -77,7 +77,9 @@ appraised `/v1/models` and `/v1/chat/completions` routes. Flint validates the
 token at its HTTPS gateway and supplies its separate backend key server-side.
 The client never reads an application password or backend API key. Other gateway
 routes keep their existing access rules. Local port 8765 must be available for
-the browser callback.
+the browser callback. `make chat` publishes this port only on the host's
+loopback address; open the printed sign-in URL on that same host if the
+container cannot launch a browser.
 The isolated acceptance uses a synthetic downstream.
 Decline, sign-in failure, collection failure, mismatched evidence and peer failure
 withhold the chat request. A mismatch sends no user access token to the demo VM.
