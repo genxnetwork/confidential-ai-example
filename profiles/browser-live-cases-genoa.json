@@ -1,0 +1,16 @@
+[
+  {
+    "name": "genoa-match",
+    "origin": "https://match.demo.genxt.network",
+    "policy": "verifier-genoa-stage-registry.json",
+    "expected_status": "verified",
+    "expected_reason": "reference_match"
+  },
+  {
+    "name": "genoa-mismatch",
+    "origin": "https://mismatch.demo.genxt.network",
+    "policy": "verifier-genoa-stage-mismatch.json",
+    "expected_status": "policy_mismatch",
+    "expected_reason": "measurement_mismatch"
+  }
+]

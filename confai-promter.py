@@ -1,37 +1,51 @@
-"""Point-in-time evidence appraisal before a cooperating client opens chat."""
+"""Sign in once and admit chat only after live evidence and HTTPS peer checks.
 
-import base64
+Confido owns evidence appraisal and peer authentication. This application owns
+policy selection, the user session, allowed chat routes, and admission records.
+"""
+
 import os
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-import confido_client
 import httpx
 import openai
-from confido_client.httpx_transport import ScopedTransport
 
 from demo import admission, identity, policy as app_policy
-from demo.attestation_log import (
-    color,
-    describe_verification,
-    format_utc,
-)
-from demo.attestation_log import (
-    log as attestation_log,
-)
+try:
+    import confido_client
+    from confido_client.httpx_transport import ScopedTransport
+    from confido_client.console import color, print_verification, format_utc
+    from confido_client.console import log as attestation_log
+except ImportError:
+    raise SystemExit("Confido client API is missing. Run ./run --update (Windows: .\\run.cmd --update).") from None
 from demo.runtime import ensure_runtime
 from demo.transport import ChatTransport
 
 POLICY_DIR = Path(
     os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles"))
 )
-ENDPOINTS = {
-    "match": "match.demo.genxt.network",
-    "mismatch": "mismatch.demo.genxt.network",
-}
 CHAT_MODEL = "tinyllama-1.1b-chat-v1.0"
+
+
+def safe_error_message(error):
+    """Describe failure without displaying remote bodies, tokens, or cause chains."""
+    if isinstance(error, identity.SessionUnavailable):
+        return "Sign-in service is unavailable. Saved session kept; try again later."
+    if isinstance(error, (openai.APIStatusError, httpx.HTTPStatusError)):
+        if isinstance(error, openai.APIStatusError):
+            status = error.status_code
+        else:
+            status = error.response.status_code
+        return f"Request failed (HTTP {status})."
+    if isinstance(error, (openai.APITimeoutError, httpx.TimeoutException)):
+        return "Request timed out. The remote outcome may be unknown."
+    if isinstance(error, (openai.APIConnectionError, httpx.TransportError)):
+        return "Connection failed. The remote outcome may be unknown."
+    return f"Operation failed ({type(error).__name__})."
 
 
 def load_policy(endpoint):
@@ -44,10 +58,12 @@ def reference_link(policy):
 
 
 def new_bundle_path(endpoint):
-    root = Path(
-        os.environ.get("CONFIDO_RUN_DIR", Path.home() / ".local/state/confido/runs")
-    )
+    """Create a private directory for one appraisal and its admission records."""
+    state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
+    default_runs = state_root / "confidential-ai-example/runs"
+    root = Path(os.environ.get("CONFIDO_RUN_DIR", default_runs))
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    root.chmod(0o700)
     run = root / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8]
     )
@@ -56,6 +72,7 @@ def new_bundle_path(endpoint):
 
 
 def show_result(result, *, admitted=False, reason=None):
+    """Present evidence status separately from the application's admission decision."""
     print("\n" + color("ATTESTATION SUMMARY", "heading"))
     if result is None:
         print("  Evidence: NOT VERIFIED")
@@ -78,28 +95,8 @@ def show_result(result, *, admitted=False, reason=None):
     )
 
 
-def setup_client(endpoint):
-    """A current runtime and a fresh caller-owned run are required for admission."""
-    runtime = ensure_runtime()
-    policy = load_policy(endpoint)
-    print("\nATTESTATION ENDPOINT | " + policy["origin"] + "/tee-report")
-    print(color("Reference: " + reference_link(policy), "reference"))
-    print(
-        "A quote binds the challenge, certificate and IMA log. TLS session binding is unsupported."
-    )
-    answer = (
-        input("Retrieve and verify the report before chat? [Y/n]: ").strip().lower()
-    )
-    if answer not in ("", "y", "yes"):
-        print("Chat was not opened.")
-        return None
-    try:
-        access_token = identity.sign_in()
-    except Exception:
-        print("Email sign-in failed. No application request was sent.")
-        return None
-    bundle_path = new_bundle_path(endpoint)
-    result = None
+def collect_attempt(policy):
+    """Return a fresh live appraisal and its duration; this does not admit chat."""
     print(
         "\n"
         + color("ATTESTATION LOG", "heading")
@@ -107,28 +104,70 @@ def setup_client(endpoint):
         + format_utc(datetime.now(timezone.utc)),
         flush=True,
     )
+    attestation_log("Requesting fresh challenge-bound evidence and appraising it locally")
+    started = time.monotonic()
+    attempt = confido_client.appraise(
+        policy["origin"],
+        policy["verifier_bytes"],
+        policy.get("allow_untrusted_bootstrap", False),
+    )
+    appraisal_ms = (time.monotonic() - started) * 1000
+    attestation_log(f"Evidence collected and appraised in {appraisal_ms:.1f} ms")
+    return attempt, appraisal_ms
+
+
+def record_attempt(attempt, bundle_path, runtime, appraisal_ms):
+    """Save private evidence and runtime records, then render the verifier checks."""
+    admission.save_private(bundle_path, attempt.archive)
+    admission.save_private(
+        bundle_path.with_suffix(".runtime.json"),
+        {"runtime": runtime, "timings": {"appraisal_ms": appraisal_ms}},
+    )
+    print_verification(attempt)
+    attestation_log(f"Verification archive saved: {bundle_path}")
+
+
+def create_chat_client(session, auth, origin):
+    """Use the peer-checked transport and resolve the current token per request."""
+    http_client = httpx.Client(
+        transport=ChatTransport(ScopedTransport(session), lambda: auth.access_token),
+        follow_redirects=False,
+        timeout=30.0,
+        trust_env=False,
+    )
+    return openai.OpenAI(
+        api_key=auth.token,
+        base_url=f"{origin}/v1",
+        http_client=http_client,
+        max_retries=0,
+    )
+
+
+def setup_client(endpoint, auth, *, runtime=None):
+    """Collect and authenticate one live attempt before constructing a chat client.
+
+    Decline or failure withholds chat. Archive and decision records are private
+    diagnostics, separate from the live context consumed by peer authentication.
+    """
+    if runtime is None:
+        runtime = ensure_runtime()
+    policy = load_policy(endpoint)
+    print("\nATTESTATION ENDPOINT | " + policy["origin"] + "/tee-report")
+    print(color("Reference: " + reference_link(policy), "reference"))
+    print(
+        "A quote binds the challenge, certificate and IMA log. TLS session binding is unsupported."
+    )
+    answer = input("Retrieve and verify the report before chat? [Y/n]: ").strip().lower()
+    if answer not in ("", "y", "yes"):
+        print("Chat was not opened.")
+        return None
+
+    bundle_path = new_bundle_path(endpoint)
+    result = None
     try:
-        attestation_log("Requesting fresh challenge-bound evidence and appraising it locally")
-        started = time.monotonic()
-        attempt = confido_client.appraise(
-            policy["origin"],
-            policy["verifier_bytes"],
-            policy.get("allow_untrusted_bootstrap", False),
-        )
-        appraisal_ms = (time.monotonic() - started) * 1000
-        result, archive = attempt.result, attempt.archive
-        attestation_log(f"Evidence collected and appraised in {appraisal_ms:.1f} ms")
-        admission.save_private(bundle_path, archive)
-        admission.save_private(
-            bundle_path.with_suffix(".runtime.json"),
-            {"runtime": runtime, "timings": {"appraisal_ms": appraisal_ms}},
-        )
-        describe_verification(
-            result,
-            base64.b64decode(archive["inputs"]["report"], validate=True),
-            base64.b64decode(archive["inputs"]["reference"], validate=True),
-        )
-        attestation_log(f"Verification archive saved: {bundle_path}")
+        attempt, appraisal_ms = collect_attempt(policy)
+        result = attempt.result
+        record_attempt(attempt, bundle_path, runtime, appraisal_ms)
         if result["status"] != "verified":
             admission.save_private(
                 bundle_path.with_suffix(".decision.json"),
@@ -146,31 +185,21 @@ def setup_client(endpoint):
         )
         session = admission.authenticate(policy, result, attempt=attempt)
         attestation_log("HTTPS peer and attestation endpoint authenticated")
-        http_client = httpx.Client(
-            transport=ChatTransport(ScopedTransport(session), access_token),
-            follow_redirects=False,
-            timeout=30.0,
-            trust_env=False,
-        )
-        client = openai.OpenAI(
-            api_key=access_token,
-            base_url=f"{policy['origin']}/v1",
-            http_client=http_client,
-            max_retries=0,
-        )
+        client = create_chat_client(session, auth, policy["origin"])
     # Any collection, verification, transport, or client failure must deny admission.
     except Exception as error:  # noqa: BLE001
+        detail = safe_error_message(error)
         admission.save_private(
             bundle_path.with_suffix(".decision.json"),
             {
                 "schema_version": 2,
                 "application_admitted": False,
                 "reason": "collection_or_admission_failed",
-                "detail": str(error),
+                "detail": detail,
             },
         )
-        attestation_log(f"Application admission failed: {error}")
-        show_result(result, reason=str(error))
+        attestation_log("Application admission failed: " + detail)
+        show_result(result, reason=detail)
         return None
     admission.save_private(
         bundle_path.with_suffix(".decision.json"),
@@ -192,7 +221,6 @@ def setup_client(endpoint):
 
 def chat_loop(client):
     """Run a chat session, then return to endpoint selection."""
-    # Initialize conversation history
     conversation = [{"role": "system", "content": "You are a helpful assistant."}]
 
     print("\nWelcome to the Interactive Chat!")
@@ -201,15 +229,12 @@ def chat_loop(client):
     print("-" * 50)
 
     while True:
-        # Get user input
         user_input = input("\nYou > ").strip()
 
-        # Check for exit commands
-        if user_input.lower() in ["exit", "quit"]:
+        if user_input.lower() in ("exit", "quit"):
             print("\nChat ended. Returning to endpoint selection.")
             return
 
-        # Check for clear command
         if user_input.lower() == "clear":
             conversation = [
                 {"role": "system", "content": "You are a helpful assistant."}
@@ -220,33 +245,29 @@ def chat_loop(client):
         if not user_input:
             continue
 
-        # Add user message to conversation history
         conversation.append({"role": "user", "content": user_input})
 
         try:
-            # Get completion from the model
             completion = client.chat.completions.create(
                 model=CHAT_MODEL, messages=conversation
             )
 
-            # Extract and print the response
             assistant_response = completion.choices[0].message.content
             print("\nAssistant:", assistant_response)
 
-            # Add assistant's response to conversation history
             conversation.append({"role": "assistant", "content": assistant_response})
 
         except openai.AuthenticationError:
-            print("\nSign-in expired or was rejected. Start a new attestation and sign in again.")
-            return
+            raise identity.AuthenticationRequired("Sign-in was rejected") from None
+        except identity.AuthenticationRequired:
+            raise
         # Keep an admitted chat session usable after one failed API call.
-        except Exception as e:  # noqa: BLE001
-            print(f"\nError: {e!s}")
-            print("Please try again.")
+        except Exception as error:  # noqa: BLE001
+            print("\n" + safe_error_message(error))
 
 
-def main():
-    print("\nConfido evidence-appraisal chat demo")
+def show_intro():
+    """Explain the attestation terms and coverage before endpoint selection."""
     print(
         "Before chat, Confido verifies TEE/HCL evidence, a challenge-bound vTPM quote, PCRs and the IMA log."
     )
@@ -263,31 +284,69 @@ def main():
         "TPM  = Trusted Platform Module (vTPM: virtual TPM); PCR = Platform Configuration Register"
     )
     print("IMA  = Integrity Measurement Architecture")
+
+
+def choose_endpoint():
+    """Return a selected local policy name, or None when the user exits."""
     while True:
         print("\n1. match.demo.genxt.network — expected reference match")
         print("2. mismatch.demo.genxt.network — expected reference mismatch")
         print("0. Exit")
         choice = input("\nEndpoint [1]: ").strip() or "1"
         if choice == "0":
-            return
+            return None
         endpoint = {"1": "match", "2": "mismatch"}.get(choice)
         if endpoint is None:
             print("Choose 0, 1 or 2.")
             continue
+        return endpoint
+
+
+def main():
+    """Check the runtime, sign in once, and reuse the session across endpoints."""
+    print("\nConfido evidence-appraisal chat demo")
+    try:
+        runtime = ensure_runtime()
+    except RuntimeError:
+        print("Client runtime is incompatible. Run ./run --update (Windows: .\\run.cmd --update).", file=sys.stderr)
+        return 1
+    try:
+        auth = identity.authenticate()
+    except Exception as error:
+        print("Email sign-in failed. " + safe_error_message(error), file=sys.stderr)
+        return 1
+    if auth is None:
+        return 0
+
+    show_intro()
+    while True:
+        endpoint = choose_endpoint()
+        if endpoint is None:
+            return 0
         try:
-            client = setup_client(endpoint)
+            client = setup_client(endpoint, auth, runtime=runtime)
             if client is not None:
                 try:
                     chat_loop(client)
                 finally:
                     client.close()
+        except identity.AuthenticationRequired:
+            print("Sign-in expired or was rejected. Please sign in again.")
+            try:
+                identity.logoff(auth)
+                auth = identity.authenticate()
+            except Exception as error:
+                print("Email sign-in failed. " + safe_error_message(error), file=sys.stderr)
+                return 1
+            if auth is None:
+                return
         # Return to endpoint selection after any failed setup or session.
         except Exception as exc:  # noqa: BLE001
-            print(f"\nRequest withheld: {exc}")
+            print("\nRequest withheld: " + safe_error_message(exc))
 
 
 if __name__ == "__main__":
     try:
-        main()
+        raise SystemExit(main())
     except (EOFError, KeyboardInterrupt):
         print("\nGoodbye.")

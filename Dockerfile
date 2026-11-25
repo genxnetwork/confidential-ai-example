@@ -1,24 +1,31 @@
-FROM ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc
-ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 CONFIDO_RUNTIME_MODE=packaged
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates \
-    && dpkg-query -W > /usr/local/share/runtime-packages.txt \
-    && rm -rf /var/lib/apt/lists/*
+# Users run the final image; the tests stage checks the application.
+FROM python:3.15.2-slim-bookworm@sha256:498829c717b1e59fc42f0e7865eafe4e04ca0f70a3769d4ae70ba218df54507c AS runtime
+ENV PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    XDG_STATE_HOME=/state CONFIDO_AUTH_CALLBACK_BIND=0.0.0.0 \
+    CONFIDO_POLICY_DIR=/app/genoa-profiles
 WORKDIR /app
 COPY requirements.lock /app/
-COPY build/wheels /wheels
-COPY build/wheel.sha256 /wheels/wheel.sha256
-RUN cd /wheels && sha256sum -c wheel.sha256 \
-    && python3 -m pip install --no-cache-dir --require-hashes -r /app/requirements.lock \
-    && python3 -m pip install --no-index --no-deps /wheels/*.whl \
-    && python3 -c 'import confido_client; assert confido_client.build_info()["wrapper"]["version"] == "0.2.0"' \
-    && rm -rf /wheels
-COPY confai-promter.py Makefile Dockerfile confido-client-wheel.json /app/
-COPY LICENSE THIRD_PARTY_NOTICES.md /app/
-COPY build/runtime.json /app/build/runtime.json
-COPY demo /app/demo
-COPY profiles /app/profiles
-COPY scripts /app/scripts
-RUN python3 scripts/dev_info.py
-RUN useradd --create-home --uid 10001 demo
+RUN python3 -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.lock
+COPY . /app/
+ARG CONFIDO_CLIENT_WHEEL=
+RUN if [ -n "$CONFIDO_CLIENT_WHEEL" ]; then \
+        python3 scripts/install_client_wheel.py --client-wheel "$CONFIDO_CLIENT_WHEEL"; \
+    else python3 scripts/install_client_wheel.py; fi \
+    && chmod 0644 /usr/local/confido-client-install.json \
+    && rm -rf /app/.image-wheel
+RUN python3 -c 'from demo.policy import prepare_genoa_profiles; prepare_genoa_profiles("/app/genoa-profiles")' \
+    && useradd --create-home --uid 10001 demo \
+    && install -d -m 0700 -o demo -g demo /state \
+    && chown -R demo:demo /app/genoa-profiles
 USER demo
 CMD ["python3", "confai-promter.py"]
+
+FROM runtime AS tests
+COPY tests /app/tests
+USER demo
+RUN python3 -m unittest discover -s tests -v \
+    && printf 'Application tests passed\n' > /tmp/application-tests-passed
+
+FROM runtime AS final
+# Make the final image depend on tests of this exact runtime and installed wheel.
+COPY --from=tests /tmp/application-tests-passed /usr/local/share/confidential-ai-example/tests-passed

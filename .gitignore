@@ -182,3 +182,6 @@ __pycache__/
 *.pfx
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Explicit local candidate for image builds
+.image-wheel/

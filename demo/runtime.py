@@ -1,90 +1,72 @@
-"""Verify the installed Confido client against the local runtime manifest."""
+"""Check the public client API used by the example; never install dependencies."""
 
-import hashlib
 import importlib
 import json
-import os
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_REVISION = 2
+INSTALL_RECORD = Path(sys.prefix) / "confido-client-install.json"
 
 
-def file_digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
-
-def source_digest(root, scope):
-    output = subprocess.check_output(
-        [sys.executable, str(root / "scripts/source_fingerprint.py"), str(root), scope],
-        text=True,
-    )
-    return output.splitlines()[0]
+def validate_build_info(info, version):
+    """Require the supported pipeline and pinned SDK; native versions are diagnostic."""
+    if info["client"]["core"]["pipeline_revision"] != PIPELINE_REVISION:
+        raise ValueError("Unsupported verifier pipeline")
+    if info["wrapper"]["version"] != version:
+        raise ValueError("Confido client version is incompatible")
 
 
 def ensure_runtime():
+    """Return installed client metadata, or fail before any login or collection."""
     try:
-        manifest = json.loads((ROOT / "build/runtime.json").read_bytes())
-        if (
-            manifest["schema_version"] != 2
-            or manifest["pipeline_revision"] != PIPELINE_REVISION
-        ):
-            raise ValueError("Unsupported runtime manifest/pipeline")
+        if sys.version_info[:2] != (3, 15):
+            raise ValueError("Python 3.15 is required")
         pin = json.loads((ROOT / "confido-client-wheel.json").read_text())
-        if manifest["client_distribution"] != f"confido-client=={pin['version']}":
-            raise ValueError("Client distribution differs from pin")
-        module = importlib.import_module("confido_client._native")
-        artifact = manifest["artifact"]
-        if file_digest(module.__file__) != artifact["binary_sha256"]:
-            raise ValueError("Loaded Confido client binary differs from manifest")
-        package_dir = Path(module.__file__).parent
-        for name, expected in artifact["python_files"].items():
-            relative = Path(name)
-            if (
-                relative.is_absolute()
-                or ".." in relative.parts
-                or file_digest(package_dir / relative) != expected
-            ):
-                raise ValueError("Loaded Confido client Python adapter differs from manifest")
-        info = module.build_info()
-        if info != artifact["build_info"]:
-            raise ValueError("Loaded Confido client build metadata differs from manifest")
-        if info["client"]["core"]["pipeline_revision"] != PIPELINE_REVISION:
-            raise ValueError("Verifier pipeline is incompatible with this caller")
-        for part in (info["client"]["core"], info["client"]["wrapper"], info["wrapper"]):
-            if part["version"] != pin["version"]:
-                raise ValueError("Loaded Confido client version differs from pin")
-        for actual, expected in (
-            (info["client"]["core"]["source_sha256"], pin["core_source_sha256"]),
-            (info["client"]["wrapper"]["source_sha256"], pin["client_source_sha256"]),
-            (info["wrapper"]["source_sha256"], pin["wrapper_source_sha256"]),
-        ):
-            if actual != expected:
-                raise ValueError("Loaded Confido client sources differ from pin")
-        if source_digest(ROOT, "application") != manifest["sources"]["application"]:
-            raise ValueError("Caller sources differ from runtime manifest")
-        if os.environ.get("CONFIDO_RUNTIME_MODE") != "packaged":
-            wheel = ROOT / "build/wheels" / artifact["wheel"]
-            if (
-                not wheel.is_file()
-                or file_digest(wheel) != artifact["wheel_sha256"]
-            ):
-                raise ValueError("Local wheel differs from runtime manifest or is missing")
+        client = importlib.import_module("confido_client")
+        console = importlib.import_module("confido_client.console")
+        transport = importlib.import_module("confido_client.httpx_transport")
+        required_apis = (
+            (client, "appraise"),
+            (console, "print_verification"),
+            (transport, "ScopedTransport"),
+        )
+        for module, name in required_apis:
+            if not callable(getattr(module, name, None)):
+                raise ValueError(f"Confido client is missing {name}")
+        info = client.build_info()
+        validate_build_info(info, pin["version"])
         return {
             "pipeline_revision": PIPELINE_REVISION,
-            "artifacts": {"confido-client": artifact},
-            "caller_source_sha256": manifest["sources"]["application"],
+            "client_distribution": f"confido-client=={pin['version']}",
+            "build_info": info,
         }
-    except (
-        OSError,
-        ValueError,
-        KeyError,
-        AttributeError,
-        ImportError,
-        subprocess.CalledProcessError,
-    ) as error:
-        raise RuntimeError(
-            f"Runtime is stale or incompatible: {error}. Run make dev-update."
-        ) from error
+    except (ImportError, AttributeError, KeyError, TypeError, ValueError, OSError) as error:
+        raise RuntimeError(f"Client is incompatible: {error}. Run ./run --update.") from error
+
+
+def main():
+    """Show installed compatibility and optional build provenance without network I/O."""
+    try:
+        snapshot = ensure_runtime()
+    except RuntimeError as error:
+        raise SystemExit(str(error))
+    print(snapshot["client_distribution"], "pipeline", snapshot["pipeline_revision"])
+    print("Client source:", snapshot["build_info"]["client"]["wrapper"]["source_sha256"])
+    try:
+        record = json.loads(INSTALL_RECORD.read_text())
+        if record["build_info"] == snapshot["build_info"]:
+            print("Installed wheel:", record["wheel"], "SHA-256", record["wheel_sha256"])
+            if "github" in record:
+                source = record["github"]
+                print("GitHub:", source["repository"], "run", source["run_id"],
+                      "commit", source["source_commit"])
+        else:
+            print("Installation record describes a different client build.")
+    except (OSError, ValueError, KeyError, TypeError):
+        print("No installation provenance recorded; client API is compatible.")
+
+
+if __name__ == "__main__":
+    main()

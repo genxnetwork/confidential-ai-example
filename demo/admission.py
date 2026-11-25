@@ -3,15 +3,21 @@
 import hashlib
 import json
 import os
+from pathlib import Path
 
 
 def save_private(path, record):
+    """Create one private record without replacing an existing run artifact."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.parent.chmod(0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
         json.dump(record, stream, indent=2)
 
 
 def authenticate(app, result, *, attempt=None):
+    """Bind admission to the selected policy and consume a live peer-check attempt."""
     if result.get("scope") != "evidence_only" or result.get("status") != "verified":
         raise ValueError("Evidence verification did not pass")
     if attempt is None:

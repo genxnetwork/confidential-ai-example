@@ -1,0 +1,46 @@
+#!/bin/sh
+# Run the published Linux image with private persistent state and a local callback.
+set -eu
+case "$#:${1-}" in
+    0:|1:--setup|1:--info|1:--update) ;;
+    1:--help|1:-h)
+        printf '%s\n' 'Usage: ./run [--setup | --info | --update]' \
+            'Requires Docker running with Linux containers.' \
+            'First run downloads the demo image. --update refreshes it explicitly.'
+        exit 0 ;;
+    *) printf '%s\n' 'Usage: ./run [--setup | --info | --update]' >&2; exit 2 ;;
+esac
+if ! command -v docker >/dev/null 2>&1; then
+    printf '%s\n' 'Install Docker and start its Linux container engine, then run ./run again.' >&2
+    exit 1
+fi
+if ! engine=$(docker info --format '{{.OSType}}' 2>/dev/null); then
+    printf '%s\n' 'Docker is unavailable. Start Docker and check your access to its daemon.' >&2
+    exit 1
+fi
+if [ "$engine" != linux ]; then
+    printf '%s\n' 'Switch Docker to Linux containers, then run ./run again.' >&2
+    exit 1
+fi
+image=${CONFIDO_IMAGE:-ghcr.io/genxnetwork/confidential-ai-example:latest}
+if [ "${1-}" = --update ] || ! docker image inspect "$image" >/dev/null 2>&1; then
+    docker pull --platform linux/amd64 "$image"
+fi
+case "${1-}" in
+    --setup) printf '%s\n' 'Ready. Start the demo with ./run'; exit 0 ;;
+    --info|--update)
+        exec docker run --rm --platform linux/amd64 --network none "$image" python3 -m demo.runtime ;;
+esac
+volume=${CONFIDO_STATE_VOLUME:-confidential-ai-example-state}
+case "$volume" in ''|*[!a-zA-Z0-9_.-]*|[!a-zA-Z0-9]*) printf '%s\n' 'Invalid Docker state volume name.' >&2; exit 2 ;; esac
+set -- run --rm --platform linux/amd64 --interactive
+if [ -t 0 ] && [ -t 1 ]; then set -- "$@" --tty; fi
+set -- "$@" --publish 127.0.0.1:8765:8765 \
+    --mount "type=volume,source=$volume,target=/state" \
+    --env "CONFIDO_COLOR=${CONFIDO_COLOR:-auto}"
+if [ -n "${CONFIDO_POLICY_DIR:-}" ]; then
+    policies=$(CDPATH= cd "$CONFIDO_POLICY_DIR" && pwd)
+    set -- "$@" --mount "type=bind,source=$policies,target=/policies,readonly" \
+        --env CONFIDO_POLICY_DIR=/policies
+fi
+exec docker "$@" "$image"

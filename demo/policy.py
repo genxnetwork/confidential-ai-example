@@ -1,13 +1,32 @@
 """Load caller-owned application and verifier policies from local files."""
 
 import json
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
 MAX_POLICY_BYTES = 64 * 1024
 
 
+def prepare_genoa_profiles(destination=None):
+    """Prepare private application policies that select the enrolled Genoa pair."""
+    root = Path(__file__).resolve().parents[1]
+    destination = Path(destination or root / ".artifacts/genoa-console-profiles").resolve()
+    destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+    destination.chmod(0o700)
+    for source, name in (
+        ("match.json", "match.json"), ("mismatch.json", "mismatch.json"),
+        ("verifier-genoa-stage-registry.json", "verifier-match.json"),
+        ("verifier-genoa-stage-mismatch.json", "verifier-mismatch.json"),
+    ):
+        target = destination / name
+        shutil.copyfile(root / "profiles" / source, target)
+        target.chmod(0o600)
+    return destination
+
+
 def load_policy(path):
+    """Read bounded local policies and reject origins or paths outside their scope."""
     path = Path(path)
     with path.open("rb") as source:
         raw = source.read(MAX_POLICY_BYTES + 1)

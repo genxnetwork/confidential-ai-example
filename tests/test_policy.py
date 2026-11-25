@@ -9,6 +9,15 @@ from demo.policy import load_policy
 
 
 class PolicyTests(unittest.TestCase):
+    def test_stage_negative_keeps_platform_and_changes_reference(self):
+        profiles = Path(__file__).resolve().parents[1] / "profiles"
+        positive = json.loads((profiles / "verifier-genoa-stage-registry.json").read_text())
+        negative = json.loads((profiles / "verifier-genoa-stage-mismatch.json").read_text())
+        self.assertEqual(negative["platform"], positive["platform"])
+        self.assertEqual(negative["reference"]["repository"], positive["reference"]["repository"])
+        self.assertIn("two-module-mismatch", negative["reference"]["path"])
+        self.assertNotEqual(negative["reference"]["sha256"], positive["reference"]["sha256"])
+
     def test_local_verifier_policy_is_loaded_without_network(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

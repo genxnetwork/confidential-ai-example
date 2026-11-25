@@ -1,8 +1,12 @@
 {
   "distribution": "confido-client",
-  "version": "0.2.0",
-  "source_commit": "d07ac7d0ce2b8a9e1378b24e0cecfd775e0a3217",
-  "core_source_sha256": "5941994611f20e4220b912903e0a48258f343545466029cef9d2f662b8d8a737",
-  "client_source_sha256": "b64e5f975c1ddbaa3ba5c332b8cd10eeaf5539aea4cd2f01a54a666644612b96",
-  "wrapper_source_sha256": "a6ad70818fcda57600c0ea11ab79080ff56d3ae9589590f175b36eebfb7ab9bb"
+  "version": "0.2.1a1",
+  "github": {
+    "repository": "jandigitrust/confido",
+    "workflow": "client-wheel.yml",
+    "branch": "main",
+    "artifacts": {
+      "linux-x86_64-cp315": "client-wheel-ubuntu-22.04-py3.15"
+    }
+  }
 }

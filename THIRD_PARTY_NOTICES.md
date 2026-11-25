@@ -10,5 +10,10 @@ pinned in `requirements.lock`; installed distributions retain their own licence
 metadata. Review the final wheel and container inventories before public
 distribution.
 
+MSAL Python and MSAL Extensions are MIT-licensed. Their runtime dependencies,
+including requests, PyJWT and cryptography, retain their own installed licence
+metadata. The image installs the exact wheels in `requirements.lock`; no
+platform keychain or broker extra is included.
+
 These notices document upstream terms; they do not establish ownership or
 licence compatibility.

@@ -25,10 +25,14 @@ rebuilt local container match/mismatch run. Public deployment still requires
 its own configuration review and promotion.
 
 To regenerate the positive policy using the public registry at the pinned
-commit, without a local registry checkout:
+commit, first prepare the separate
+[reference client environment](../../sanctio/README.md).
+From this example's root in a Unix shell, without a local registry checkout:
 
 ```sh
-python3 scripts/enroll_reference.py \
+../sanctio/.venv/bin/python ../sanctio/enroll_reference.py \
+  --issuer-policy profiles/reference-issuers-stage.json \
+  --platform profiles/platform-genoa-stage.json \
   --registry teraveri/reference-value-registry \
   --commit 3fa7913d44a377806bd94126589be1feb362b6cb \
   --entry entries/azure-snp-vtpm-ima-1/azure-genoa-ubuntu2204-kernel-1071-stage \

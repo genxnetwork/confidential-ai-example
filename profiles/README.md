@@ -13,6 +13,7 @@ repositories are checked out side by side.
 
 | Files | Purpose |
 | --- | --- |
+| [browser-live-cases-genoa.json](browser-live-cases-genoa.json) | Opt-in Genoa browser acceptance cases for the Confido runner; selects exact policy files and expected evidence status/reason. |
 | [extension-origins.json](extension-origins.json) | Client-side browser extension origin allowlist for the demo; it is not a server routing configuration. |
 | [match.json](match.json), [mismatch.json](mismatch.json) | Application policies: HTTPS origin, verifier-policy filename, and explicit untrusted bootstrap option. The Genoa console command copies these and selects different verifier files. |
 | [verifier-match.json](verifier-match.json), [verifier-mismatch.json](verifier-mismatch.json) | Matching and deliberately incompatible Milan reference pins for those two application policies. |
@@ -34,9 +35,11 @@ or reference-format failure.
 
 The application policy uses schema version **2** and points to a verifier
 policy with schema version **2**. Both use evidence profile
-`azure-snp-vtpm-ima/1`. The compatible Confido verifier and native transport
-packages both target **0.2.0**. Wire and schema versions remain separate
-contracts.
+`azure-snp-vtpm-ima/1`. The Python SDK version is selected explicitly by
+[`confido-client-wheel.json`](../confido-client-wheel.json); its native components
+use SemVer prerelease spelling while Python uses PEP 440. Runtime compatibility
+also requires verifier pipeline revision 2. Wire and schema versions remain
+separate contracts.
 
 See [Genoa stage enrollment](../docs/genoa-stage-reference.md) for the pinned
 registry commit, enrollment command, and isolated match/mismatch run. A new
