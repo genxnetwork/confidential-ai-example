@@ -1,7 +1,6 @@
 PYTHON ?= python3
 VENV ?= .venv
-MATURIN ?= $(abspath $(VENV))/bin/maturin
-CONFIDO_WHEEL ?=
+CONFIDO_CLIENT_WHEEL ?=
 DOCKER ?= docker
 IMAGE ?= confidential-ai-example:0.2.0
 GENOA_PROFILES ?= .artifacts/genoa-console-profiles
@@ -9,15 +8,12 @@ GENOA_PROFILES ?= .artifacts/genoa-console-profiles
 $(VENV)/bin/pip:
 	$(PYTHON) -m venv $(VENV)
 dev-setup: $(VENV)/bin/pip
-	$(VENV)/bin/python -m pip install 'maturin==1.15.0' 'patchelf==0.17.2.4'
 	$(VENV)/bin/python -m pip install --require-hashes -r requirements.lock
 	$(MAKE) dev-update
-$(VENV)/bin/maturin: | $(VENV)/bin/pip
-	$(VENV)/bin/python -m pip install 'maturin==1.15.0' 'patchelf==0.17.2.4'
-wheel: $(VENV)/bin/maturin
-	$(VENV)/bin/python scripts/build_wheels.py --maturin "$(MATURIN)" $(if $(CONFIDO_WHEEL),--verifier-wheel "$(CONFIDO_WHEEL)",)
+wheel: $(VENV)/bin/pip
+	$(VENV)/bin/python scripts/prepare_client_wheel.py $(if $(CONFIDO_CLIENT_WHEEL),--client-wheel "$(CONFIDO_CLIENT_WHEEL)",)
 dev-update: wheel
-	$(VENV)/bin/python scripts/install_wheels.py
+	$(VENV)/bin/python scripts/install_client_wheel.py
 	$(MAKE) dev-info
 dev-info:
 	$(VENV)/bin/python scripts/dev_info.py
@@ -40,4 +36,3 @@ chat:
 		--env CONFIDO_AUTH_CALLBACK_BIND=0.0.0.0 $(IMAGE)
 test:
 	$(VENV)/bin/python -m unittest discover -s tests -v
-	cargo test --locked --manifest-path native_transport/Cargo.toml

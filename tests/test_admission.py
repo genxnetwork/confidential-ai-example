@@ -1,5 +1,6 @@
-"""Client orchestration tests: mocks are not presented as hardware validation."""
+"""Application decisions remain separate from Confido client appraisal."""
 
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -7,11 +8,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-spec = importlib.util.spec_from_file_location(
+import httpx
+
+from demo import admission
+
+SPEC = importlib.util.spec_from_file_location(
     "chat_demo", Path(__file__).resolve().parents[1] / "confai-promter.py"
 )
-demo = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(demo)
+demo = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(demo)
 
 
 class AdmissionTests(unittest.TestCase):
@@ -24,167 +29,139 @@ class AdmissionTests(unittest.TestCase):
             "coverage": {"ima_entries": 47},
             "scope": "evidence_only",
             "report_sha256": "0" * 64,
+            "policy_sha256": hashlib.sha256(self.policy["verifier_bytes"]).hexdigest(),
         }
 
-    def live_run(self, record):
-        return Mock(
-            result=record,
-            archive={"inputs": {"report": "e30=", "reference": "e30="}},
-            timings={},
-        )
+    def attempt(self, record):
+        attempt = Mock()
+        attempt.result = record
+        attempt.archive = {
+            "origin": self.policy["origin"] + "/",
+            "inputs": {"report": "e30=", "reference": "e30="},
+        }
+        return attempt
 
-    def run_setup(self, answer, record=None):
+    def run_setup(self, answer, record=None, *, peer_error=None):
         record = record or self.record
-        session = Mock(result_json=json.dumps(record))
+        attempt = self.attempt(record)
         with (
             tempfile.TemporaryDirectory() as path,
             patch.object(demo, "ensure_runtime", return_value={}),
             patch.object(demo, "describe_verification"),
+            patch.object(demo.confido_client, "appraise", return_value=attempt) as appraise,
             patch.object(
-                demo.collection,
-                "collect_and_verify",
-                return_value=self.live_run(record),
-            ) as connect,
-            patch.object(demo.admission, "authenticate", return_value=session),
-            patch.object(demo.identity, "sign_in", return_value="test-access-token"),
+                demo.admission,
+                "authenticate",
+                side_effect=peer_error,
+                return_value=Mock(),
+            ) as authenticate,
+            patch.object(demo, "ScopedTransport", return_value=httpx.MockTransport(
+                lambda _request: httpx.Response(200, json={})
+            )),
+            patch.object(demo.identity, "sign_in", return_value="user-token") as sign_in,
             patch.object(demo, "new_bundle_path", return_value=Path(path) / "run.json"),
             patch.object(demo.openai, "OpenAI") as app,
             patch("builtins.input", return_value=answer),
             patch("builtins.print"),
         ):
             demo.setup_client("match")
-            return connect.call_count, app.call_count
+            return appraise.call_count, authenticate.call_count, app.call_count, sign_in.call_count
 
-    def test_decline_never_appraises_or_opens_chat(self):
-        self.assertEqual(self.run_setup("n"), (0, 0))
+    def test_decline_does_not_sign_in_or_appraise(self):
+        self.assertEqual(self.run_setup("n"), (0, 0, 0, 0))
 
-    def test_each_failure_withholds_application_requests(self):
-        for reason in [
-            "measurement_mismatch",
-            "quote_binding_invalid",
-            "https_authentication_failed",
-            "collection_unavailable",
-        ]:
-            self.record["reason"] = reason
-            self.assertEqual(self.run_setup("y"), (1, 0))
+    def test_rejected_evidence_never_opens_chat(self):
+        self.assertEqual(self.run_setup("y"), (1, 0, 0, 1))
 
-    def test_enter_accepts_and_chat_follows_admission(self):
+    def test_match_opens_chat_only_after_peer_authentication(self):
         self.record.update(status="verified", reason="reference_match")
-        self.assertEqual(self.run_setup(""), (1, 1))
+        self.assertEqual(self.run_setup(""), (1, 1, 1, 1))
 
-    def test_sign_in_failure_withholds_evidence_and_chat_requests(self):
+    def test_sign_in_failure_withholds_evidence_and_chat(self):
         with (
             patch.object(demo, "ensure_runtime", return_value={}),
             patch.object(demo.identity, "sign_in", side_effect=RuntimeError("unavailable")),
-            patch.object(demo.collection, "collect_and_verify") as collect,
+            patch.object(demo.confido_client, "appraise") as appraise,
             patch.object(demo.openai, "OpenAI") as app,
             patch("builtins.input", return_value=""),
             patch("builtins.print"),
         ):
             self.assertIsNone(demo.setup_client("match"))
-            collect.assert_not_called()
+            appraise.assert_not_called()
             app.assert_not_called()
 
-    def test_peer_failure_withholds_chat(self):
+    def test_peer_or_deadline_failure_withholds_chat(self):
         self.record.update(status="verified", reason="reference_match")
-        with (
-            tempfile.TemporaryDirectory() as path,
-            patch.object(demo, "ensure_runtime", return_value={}),
-            patch.object(demo, "describe_verification"),
-            patch.object(
-                demo.collection,
-                "collect_and_verify",
-                return_value=self.live_run(self.record),
-            ),
-            patch.object(
-                demo.admission, "authenticate", side_effect=ValueError("wrong peer")
-            ),
-            patch.object(demo.identity, "sign_in", return_value="test-access-token"),
-            patch.object(demo, "new_bundle_path", return_value=Path(path) / "run.json"),
-            patch.object(demo.openai, "OpenAI") as app,
-            patch("builtins.input", return_value=""),
-            patch("builtins.print"),
-        ):
-            self.assertIsNone(demo.setup_client("match"))
-            app.assert_not_called()
-            self.assertFalse(
-                json.loads((Path(path) / "run.decision.json").read_text())[
-                    "application_admitted"
-                ]
+        for reason in ("wrong peer", "Challenge deadline expired"):
+            self.assertEqual(
+                self.run_setup("y", peer_error=ValueError(reason)),
+                (1, 1, 0, 1),
             )
 
     def test_runtime_failure_prevents_collection(self):
         with (
-            patch.object(
-                demo, "ensure_runtime", side_effect=RuntimeError("stale binary")
-            ),
-            patch.object(demo.collection, "collect_and_verify") as collect,
+            patch.object(demo, "ensure_runtime", side_effect=RuntimeError("stale binary")),
+            patch.object(demo.confido_client, "appraise") as appraise,
         ):
             with self.assertRaisesRegex(RuntimeError, "stale binary"):
                 demo.setup_client("match")
-            collect.assert_not_called()
+            appraise.assert_not_called()
 
-    def test_expiry_after_rendering_withholds_chat(self):
+    def test_admission_rejects_changed_policy_result_or_origin(self):
         self.record.update(status="verified", reason="reference_match")
-        run = self.live_run(self.record)
-        run.consume.side_effect = ValueError("Challenge deadline expired")
-        with patch.object(self, "live_run", return_value=run):
-            self.assertEqual(self.run_setup(""), (1, 0))
+        attempt = self.attempt(self.record)
+        admission.authenticate(self.policy, self.record, attempt=attempt)
+        attempt.authenticate_peer.assert_called_once_with()
 
-    def test_sdk_uses_scoped_transport_without_hidden_requests(self):
-        session = Mock()
-        session.request.return_value = (
-            200,
-            [("content-type", "application/json")],
-            json.dumps(
-                {
-                    "id": "test",
-                    "object": "chat.completion",
-                    "created": 0,
-                    "model": "tinyllama-1.1b-chat-v1.0",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "message": {"role": "assistant", "content": "ok"},
-                            "finish_reason": "stop",
-                        }
-                    ],
-                }
-            ).encode(),
-        )
-        http = demo.httpx.Client(
-            transport=demo.AppraisedTransport(session, "synthetic-user-token"),
+        for changed_app, changed_result, changed_origin in (
+            (dict(self.policy, verifier_bytes=b"changed"), self.record, self.policy["origin"]),
+            (self.policy, dict(self.record, reason="altered"), self.policy["origin"]),
+            (self.policy, self.record, "https://other.test"),
+        ):
+            candidate = self.attempt(self.record)
+            candidate.archive["origin"] = changed_origin
+            with self.assertRaises(ValueError):
+                admission.authenticate(changed_app, changed_result, attempt=candidate)
+            candidate.authenticate_peer.assert_not_called()
+
+    def test_sdk_makes_one_request_through_admitted_chat_transport(self):
+        forwarded = []
+
+        def respond(request):
+            forwarded.append(request)
+            return httpx.Response(200, json={
+                "id": "test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": demo.CHAT_MODEL,
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "ok"},
+                    "finish_reason": "stop",
+                }],
+            })
+
+        http = httpx.Client(
+            transport=demo.ChatTransport(httpx.MockTransport(respond), "user-token"),
             follow_redirects=False,
+            trust_env=False,
         )
         app = demo.openai.OpenAI(
-            api_key=demo.SDK_PLACEHOLDER_API_KEY,
-            base_url="https://localhost/v1",
+            api_key="user-token",
+            base_url="https://example.test/v1",
             http_client=http,
             max_retries=0,
         )
-        self.assertEqual(session.request.call_count, 0)
+        self.assertEqual(len(forwarded), 0)
         response = app.chat.completions.create(
             model=demo.CHAT_MODEL,
-            messages=[{"role": "user", "content": "synthetic transport test"}],
+            messages=[{"role": "user", "content": "synthetic request"}],
         )
         self.assertEqual(response.choices[0].message.content, "ok")
-        self.assertEqual(session.request.call_count, 1)
-        self.assertEqual(
-            session.request.call_args.args[1], "https://localhost/v1/chat/completions"
-        )
-        self.assertIn(
-            ("authorization", "Bearer synthetic-user-token"),
-            session.request.call_args.args[2],
-        )
+        self.assertEqual(len(forwarded), 1)
+        self.assertEqual(forwarded[0].url.path, "/v1/chat/completions")
+        self.assertEqual(forwarded[0].headers["authorization"], "Bearer user-token")
         app.close()
-
-    def test_transport_rejects_unexpected_application_authorization(self):
-        session = Mock()
-        http = demo.httpx.Client(transport=demo.AppraisedTransport(session, "synthetic-user-token"))
-        with self.assertRaisesRegex(ValueError, "Unexpected application authorization header"):
-            http.get("https://localhost/v1/models", headers={"Authorization": "Bearer secret"})
-        session.request.assert_not_called()
-        http.close()
 
 
 if __name__ == "__main__":

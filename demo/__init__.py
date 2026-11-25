@@ -1,1 +1,1 @@
-"""Application-owned collection, transport and admission."""
+"""Application-owned policy, identity, presentation and admission."""

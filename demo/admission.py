@@ -1,10 +1,8 @@
-"""Application decisions are separate from evidence verification results."""
+"""Application admission stays separate from evidence and peer appraisal."""
 
-import base64
+import hashlib
 import json
 import os
-
-from _confai_transport import Session
 
 
 def save_private(path, record):
@@ -13,20 +11,17 @@ def save_private(path, record):
         json.dump(record, stream, indent=2)
 
 
-def authenticate(app, result, *, run=None):
+def authenticate(app, result, *, attempt=None):
     if result.get("scope") != "evidence_only" or result.get("status") != "verified":
         raise ValueError("Evidence verification did not pass")
-    if run is None:
+    if attempt is None:
         raise ValueError("Live caller context required for admission")
-    run.ensure_current(app, result)
-    certificate = base64.b64decode(
-        result["verified_artifacts"]["certificate_der_base64"], validate=True
-    )
-    session = Session(app["origin"], certificate)
-    status, _, _ = session.request(
-        "HEAD", app["origin"].rstrip("/") + "/tee-report", [], b""
-    )
-    if status != 204:
-        raise ValueError("Attestation endpoint unavailable on the appraised HTTPS peer")
-    run.ensure_current(app, result)
-    return session
+    # Confido serializes a bare HTTPS origin with URL's trailing slash.
+    if (
+        attempt.result != result
+        or attempt.archive["origin"].rstrip("/") != app["origin"].rstrip("/")
+    ):
+        raise ValueError("Appraisal differs from the selected application endpoint")
+    if hashlib.sha256(app["verifier_bytes"]).hexdigest() != result["policy_sha256"]:
+        raise ValueError("Verifier policy changed after appraisal")
+    return attempt.authenticate_peer()

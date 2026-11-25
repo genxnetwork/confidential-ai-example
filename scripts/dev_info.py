@@ -1,4 +1,4 @@
-"""Check current sources, wheel provenance and the actual loaded native modules."""
+"""Check current sources, wheel provenance and the loaded Confido client."""
 
 import sys
 from pathlib import Path

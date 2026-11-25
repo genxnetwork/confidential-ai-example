@@ -10,9 +10,9 @@ COPY build/wheel.sha256 /wheels/wheel.sha256
 RUN cd /wheels && sha256sum -c wheel.sha256 \
     && python3 -m pip install --no-cache-dir --require-hashes -r /app/requirements.lock \
     && python3 -m pip install --no-index --no-deps /wheels/*.whl \
-    && python3 -c 'import confido_verifier, _confai_transport; assert confido_verifier.__version__ == _confai_transport.__version__ == "0.2.0"' \
+    && python3 -c 'import confido_client; assert confido_client.build_info()["wrapper"]["version"] == "0.2.0"' \
     && rm -rf /wheels
-COPY confai-promter.py Makefile Dockerfile confido-wheel.json /app/
+COPY confai-promter.py Makefile Dockerfile confido-client-wheel.json /app/
 COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 COPY build/runtime.json /app/build/runtime.json
 COPY demo /app/demo

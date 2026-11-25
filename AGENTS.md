@@ -5,13 +5,15 @@ Start with `README.md`. For Genoa reference enrollment, read
 `docs/genoa-stage-reference.md` and `profiles/README.md` before the relevant
 policy files.
 
-- `demo/` owns report retrieval and application admission; `native_transport/`
-  authenticates the TLS peer. `schemas/` documents application-owned records;
+- `demo/` owns local policy selection, email sign-in, presentation and
+  application admission. The installed Confido client retrieves evidence and
+  authenticates the HTTPS peer. `schemas/` documents application-owned records;
   `profiles/` contains local demo decisions and
   verifier policy pins; `scripts/enroll_reference.py` checks a published
   registry entry before generating a policy.
 - [JAN Confido](https://github.com/jandigitrust/confido) owns evidence
-  verification; this example installs its released verifier wheel.
+  verification and reusable client transport; this example installs its pinned
+  `confido-client` wheel.
   `attestor` owns native collection and the direct report endpoint. This
   application does not publish reference values.
   Keep stage candidates and their limited measurement coverage clearly labeled.
@@ -19,7 +21,7 @@ policy files.
 ## Context and private data
 
 - Scope searches to relevant source, profiles, tests, and documentation. Exclude
-  `build/`, `native_transport/target/`, `.venv/`, `.artifacts/`, caches, and
+  `build/`, `.venv/`, `.artifacts/`, caches, and
   logs from broad searches.
 - Build and test tools may use generated files locally. Do not print, attach,
   or paste caches, binaries, credentials, private keys, or raw live run archives

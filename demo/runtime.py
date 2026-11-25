@@ -1,4 +1,4 @@
-"""Verify the identities of loaded native artifacts before contacting a service."""
+"""Verify the installed Confido client against the local runtime manifest."""
 
 import hashlib
 import importlib
@@ -32,46 +32,49 @@ def ensure_runtime():
             or manifest["pipeline_revision"] != PIPELINE_REVISION
         ):
             raise ValueError("Unsupported runtime manifest/pipeline")
-        infos = {}
-        for name, module_name in [
-            ("confido-verifier", "confido_verifier.confido_verifier"),
-            ("confai-transport", "_confai_transport._confai_transport"),
-        ]:
-            module = importlib.import_module(module_name)
-            item = manifest["artifacts"][name]
-            if file_digest(module.__file__) != item["binary_sha256"]:
-                raise ValueError(
-                    f"Loaded {name} binary differs from manifest: {module.__file__}"
-                )
-            info = module.build_info()
-            if info != item["build_info"]:
-                raise ValueError(f"Loaded {name} build metadata differs from manifest")
-            infos[name] = info
-        if infos["confido-verifier"]["core"]["pipeline_revision"] != PIPELINE_REVISION:
+        pin = json.loads((ROOT / "confido-client-wheel.json").read_text())
+        if manifest["client_distribution"] != f"confido-client=={pin['version']}":
+            raise ValueError("Client distribution differs from pin")
+        module = importlib.import_module("confido_client._native")
+        artifact = manifest["artifact"]
+        if file_digest(module.__file__) != artifact["binary_sha256"]:
+            raise ValueError("Loaded Confido client binary differs from manifest")
+        package_dir = Path(module.__file__).parent
+        for name, expected in artifact["python_files"].items():
+            relative = Path(name)
+            if (
+                relative.is_absolute()
+                or ".." in relative.parts
+                or file_digest(package_dir / relative) != expected
+            ):
+                raise ValueError("Loaded Confido client Python adapter differs from manifest")
+        info = module.build_info()
+        if info != artifact["build_info"]:
+            raise ValueError("Loaded Confido client build metadata differs from manifest")
+        if info["client"]["core"]["pipeline_revision"] != PIPELINE_REVISION:
             raise ValueError("Verifier pipeline is incompatible with this caller")
-        pin = json.loads((ROOT / "confido-wheel.json").read_text())
-        if manifest["verifier_distribution"] != f"confido-verifier=={pin['version']}":
-            raise ValueError("Verifier distribution differs from pin")
-        for part in ("core", "wrapper"):
-            if infos["confido-verifier"][part]["version"] != pin["version"]:
-                raise ValueError("Loaded verifier version differs from pin")
+        for part in (info["client"]["core"], info["client"]["wrapper"], info["wrapper"]):
+            if part["version"] != pin["version"]:
+                raise ValueError("Loaded Confido client version differs from pin")
+        for actual, expected in (
+            (info["client"]["core"]["source_sha256"], pin["core_source_sha256"]),
+            (info["client"]["wrapper"]["source_sha256"], pin["client_source_sha256"]),
+            (info["wrapper"]["source_sha256"], pin["wrapper_source_sha256"]),
+        ):
+            if actual != expected:
+                raise ValueError("Loaded Confido client sources differ from pin")
         if source_digest(ROOT, "application") != manifest["sources"]["application"]:
             raise ValueError("Caller sources differ from runtime manifest")
         if os.environ.get("CONFIDO_RUNTIME_MODE") != "packaged":
-            transport = source_digest(ROOT, "transport")
-            if transport != manifest["sources"]["transport"]:
-                raise ValueError("Transport sources changed since wheel build")
-            if infos["confai-transport"]["source_sha256"] != transport:
-                raise ValueError("Transport embedded sources differ from checkout")
-            for item in manifest["artifacts"].values():
-                if (
-                    file_digest(ROOT / "build/wheels" / item["wheel"])
-                    != item["wheel_sha256"]
-                ):
-                    raise ValueError("Local wheel differs from runtime manifest")
+            wheel = ROOT / "build/wheels" / artifact["wheel"]
+            if (
+                not wheel.is_file()
+                or file_digest(wheel) != artifact["wheel_sha256"]
+            ):
+                raise ValueError("Local wheel differs from runtime manifest or is missing")
         return {
             "pipeline_revision": PIPELINE_REVISION,
-            "artifacts": manifest["artifacts"],
+            "artifacts": {"confido-client": artifact},
             "caller_source_sha256": manifest["sources"]["application"],
         }
     except (

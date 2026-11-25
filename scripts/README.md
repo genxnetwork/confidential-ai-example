@@ -1,15 +1,14 @@
 # Example support scripts
 
-These scripts support local client builds, reference enrollment, and explicit
+These scripts support local wheel installation, reference enrollment, and explicit
 client checks. Start the current Genoa console from the repository root with
 `make dev-chat-genoa`; plain `make dev-chat` uses the checked-in Milan policies
 unless `CONFIDO_POLICY_DIR` selects prepared Genoa policies.
 
 | Script | Purpose |
 | --- | --- |
-| [`source_fingerprint.py`](source_fingerprint.py) | Hashes selected application and transport source inputs. |
-| [`build_wheels.py`](build_wheels.py), [`install_wheels.py`](install_wheels.py) | Download the version-pinned Confido wheel, build the local transport wheel, then fingerprint and install both artifacts. |
-| [`prepare_attribution.py`](prepare_attribution.py), [`collect_licenses.py`](collect_licenses.py) | Package the transport's third-party licences from its locked Cargo dependency graph. |
+| [`source_fingerprint.py`](source_fingerprint.py) | Hashes selected application source inputs. |
+| [`prepare_client_wheel.py`](prepare_client_wheel.py), [`install_client_wheel.py`](install_client_wheel.py) | Validate, stage and install one explicitly supplied, pinned Confido client wheel. |
 | [`build_manifest.py`](build_manifest.py) | Records wheel and container identity. |
 | [`dev_info.py`](dev_info.py), [`ensure_runtime.py`](ensure_runtime.py) | Inspect the loaded runtime and rebuild stale development artifacts. |
 | [`enroll_reference.py`](enroll_reference.py) | Verify a registry publisher statement and emit a locally pinned verifier policy. |

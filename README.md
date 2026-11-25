@@ -9,23 +9,23 @@ runtime. See Confido's
 [security model](https://github.com/jandigitrust/confido/blob/main/docs/security-model.md)
 for the underlying trust chain and terminology.
 
-A cooperating native client separates evidence verification from transport and
-application admission. `demo/collection.py` retrieves raw inputs; `confido_verifier`
-checks bytes and local policy; `native_transport/` authenticates the actual TLS
-peer; `demo/admission.py` checks the attestation endpoint over that TLS connection
-before the chat client is opened.
-The sibling [Attestor](https://github.com/jandigitrust/attestor) checkout provides
-native evidence collection and `POST /tee-report`.
+A cooperating client separates evidence verification from application admission.
+The installed [JAN Confido](https://github.com/jandigitrust/confido) client wheel
+retrieves the report and pinned reference, appraises evidence, and authenticates
+the HTTPS peer. `demo/admission.py` applies the application's policy before chat;
+`demo/transport.py` limits where the user's access token can be sent.
+[Attestor](https://github.com/jandigitrust/attestor) provides native evidence
+collection and `POST /tee-report` on the demo VM.
 The component guides cover [`demo/`](demo/README.md),
-[`native_transport/`](native_transport/README.md),
 [`scripts/`](scripts/README.md), and [`tests/`](tests/README.md).
 
 ## Current Genoa demo
 
-From the repository root, use Python, Rust/Cargo, and `make`. `make dev-setup`
-downloads the published [JAN Confido](https://github.com/jandigitrust/confido)
-`confido-verifier` wheel at the version in [`confido-wheel.json`](confido-wheel.json)
-and builds only this application's transport wheel. Attestor and the Flint
+From the repository root, use Python and `make`. This local revision uses one
+`confido-client` 0.2.0 wheel built from the JAN Confido client branch and checked
+against [`confido-client-wheel.json`](confido-client-wheel.json). Supply its path
+to the first setup; subsequent updates can reuse the staged wheel. The example
+does not build Rust code or Confido from source. Attestor and the Flint
 gateway run separately at the HTTPS origins in the application policies. The
 client needs access to AMD KDS and the GitHub API; both demo names must resolve
 to the intended HTTPS frontend from the machine running it.
@@ -36,7 +36,7 @@ download model weights. The [Flint deployment](https://github.com/genxnetwork/fl
 pins the model conversion and runtime image.
 
 ```sh
-make dev-setup
+CONFIDO_CLIENT_WHEEL=/path/to/confido_client-0.2.0-<platform>.whl make dev-setup
 make test
 make dev-chat-genoa
 ```
@@ -53,19 +53,19 @@ Use `make dev-chat-genoa` again after editing a source policy so the private
 copies are refreshed. Without `CONFIDO_POLICY_DIR`, `make dev-chat` loads the
 checked-in Milan verifier policies. `make build` and `make chat` likewise use
 the checked-in profiles, not the ignored Genoa copies; they are separate from
-this local Genoa command. `make dev-update` refreshes the verifier wheel and
-rebuilds the transport wheel.
+this local Genoa command. `make dev-update` reinstalls the pinned wheel when
+the application or client changes. Set `CONFIDO_CLIENT_WHEEL` again to replace
+the staged candidate. The wheel's distribution, version, embedded source
+identities, native binary and Python adapter are checked; its SHA-256 is recorded
+in `build/wheel.sha256`. Until a reviewed Confido client wheel is published, the
+application deliberately does not download a package by name from an index.
+Python dependencies remain pinned in `requirements.lock`. `make build` uses the
+staged wheel; it needs no Confido source checkout.
 
-The first build needs access to PyPI for a compatible published
-`confido-verifier==0.2.0` wheel; it never builds Confido from source. Cargo may
-need network access if its dependency cache is empty. To update Confido, review
-the published release and change `confido-wheel.json`, then run
-`make dev-update`. For offline use, pass `CONFIDO_WHEEL=/path/to/released.whl`
-to `make dev-update`; its distribution metadata and embedded version must match
-the pin. The exact downloaded wheel and locally built
-`confai-transport` 0.2.0 wheel are hashed in `build/wheel.sha256` and checked
-against the loaded native binaries. Dependencies remain pinned in
-`requirements.lock`. `make build` consumes those exact wheel hashes.
+To produce a candidate wheel, use a separate JAN Confido checkout at the
+`source_commit` in the pin and run `make -C bindings/client-python wheel`
+there with `PYTHON` set to the desired interpreter. The resulting wheel must
+match the operating system and Python version of this application.
 
 The [Genoa stage guide](docs/genoa-stage-reference.md) explains reference
 enrollment and earlier isolated acceptance with a synthetic downstream. Both
@@ -85,11 +85,11 @@ container cannot launch a browser.
 The isolated acceptance uses a synthetic downstream.
 Decline, sign-in failure, collection failure, mismatched evidence and peer failure
 withhold the chat request. A mismatch sends no user access token to the demo VM.
-Bootstrap retrieval is unauthenticated; an explicit
-application-policy option permits self-signed bootstrap. The app-owned
-Rust/rustls adapter checks the attested certificate's exact DER, hostname and
-validity on every connection; other origins and redirects are rejected. This
-adapter does not import the evidence verifier.
+Bootstrap retrieval is unauthenticated; an explicit application-policy option
+permits self-signed bootstrap. Confido's client checks the attested certificate's
+exact DER, hostname and validity on every connection; other origins and
+redirects are rejected. Its transport is reusable across applications, while
+this example owns the email sign-in, API route limits and admission decision.
 
 The [profile catalog](profiles/README.md) and [application schemas](schemas/README.md)
 explain each demo policy and application decision. Genoa is the AMD EPYC
@@ -105,8 +105,8 @@ checks the GENXT publisher statement before emitting a pinned positive policy.
 The positive reference is a stage candidate in the
 [Teraveri registry](https://github.com/teraveri/reference-value-registry); the
 negative reference is an unendorsed fixture there, not an alternative trusted
-baseline. During each run the application downloads the exact `reference.json`
-at the policy's full Git commit; Confido checks its SHA-256 and measurements.
+baseline. During each run the Confido client downloads the exact `reference.json`
+at the policy's full Git commit and checks its SHA-256 and measurements.
 The publisher statement is checked at enrollment, not rechecked on each run.
 Neither a registry update nor a new branch tip changes an existing pin. If the
 pinned file cannot be retrieved, the application withholds chat.
@@ -115,12 +115,12 @@ The browser extension's approved demo origins are in
 Nginx routing is maintained by [Flint](https://github.com/genxnetwork/flint).
 The generic verifier accepts policy bytes supplied by its caller and does not
 choose these trust pins.
-The caller sends a nonce directly to `POST /tee-report`; no metadata discovery
+The Confido client sends a nonce directly to `POST /tee-report`; no metadata discovery
 selects the report endpoint or a reference. After evidence appraisal, an
 unauthenticated `HEAD /tee-report` over quote-bound certificate-pinned TLS
 authenticates the intended peer before the application sends a request.
-The run directory holds a v2 verification archive, `.runtime.json` with build metadata
-and collection/verification timings, and a separate `.decision.json`;
+The run directory holds a v2 verification archive, `.runtime.json` with build
+metadata and appraisal timing, and a separate `.decision.json`;
 only the latter contains `application_admitted`.
 
 The quote binds nonce, certificate and IMA log. There is no TLS session binder or
@@ -132,9 +132,10 @@ in WASM and does not use this transport or send chat prompts.
 
 ## Runtime and attestation output
 
-`make dev-chat` checks the application and transport sources, local wheel
-hashes and the **loaded native binaries**, then downloads/rebuilds and reinstalls
-stale artifacts in the selected `VENV`.
+`make dev-chat` checks application sources, the staged wheel hash, and the
+**loaded native binary and Python adapter**, then reinstalls stale artifacts in
+the selected `VENV`. If no wheel has been staged, supply `CONFIDO_CLIENT_WHEEL`
+to `make dev-update` first.
 A package version alone does not establish compatibility. `make dev-info` checks
 this relationship explicitly; the runtime requires verifier pipeline revision 2.
 Containers use an embedded runtime manifest and need no Confido source checkout.

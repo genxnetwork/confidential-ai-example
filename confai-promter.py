@@ -2,14 +2,17 @@
 
 import base64
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+import confido_client
 import httpx
 import openai
+from confido_client.httpx_transport import ScopedTransport
 
-from demo import admission, collection, identity
+from demo import admission, identity, policy as app_policy
 from demo.attestation_log import (
     color,
     describe_verification,
@@ -19,7 +22,7 @@ from demo.attestation_log import (
     log as attestation_log,
 )
 from demo.runtime import ensure_runtime
-from demo.transport import AppraisedTransport, SDK_PLACEHOLDER_API_KEY
+from demo.transport import ChatTransport
 
 POLICY_DIR = Path(
     os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles"))
@@ -32,7 +35,7 @@ CHAT_MODEL = "tinyllama-1.1b-chat-v1.0"
 
 
 def load_policy(endpoint):
-    return collection.load_policy(POLICY_DIR / f"{endpoint}.json")
+    return app_policy.load_policy(POLICY_DIR / f"{endpoint}.json")
 
 
 def reference_link(policy):
@@ -105,12 +108,20 @@ def setup_client(endpoint):
         flush=True,
     )
     try:
-        run = collection.collect_and_verify(policy, progress=attestation_log)
-        result, archive = run.result, run.archive
+        attestation_log("Requesting fresh challenge-bound evidence and appraising it locally")
+        started = time.monotonic()
+        attempt = confido_client.appraise(
+            policy["origin"],
+            policy["verifier_bytes"],
+            policy.get("allow_untrusted_bootstrap", False),
+        )
+        appraisal_ms = (time.monotonic() - started) * 1000
+        result, archive = attempt.result, attempt.archive
+        attestation_log(f"Evidence collected and appraised in {appraisal_ms:.1f} ms")
         admission.save_private(bundle_path, archive)
         admission.save_private(
             bundle_path.with_suffix(".runtime.json"),
-            {"runtime": runtime, "timings": run.timings},
+            {"runtime": runtime, "timings": {"appraisal_ms": appraisal_ms}},
         )
         describe_verification(
             result,
@@ -133,18 +144,16 @@ def setup_client(endpoint):
         attestation_log(
             "Authenticating the HTTPS peer against the quote-bound certificate"
         )
-        session = admission.authenticate(policy, result, run=run)
+        session = admission.authenticate(policy, result, attempt=attempt)
         attestation_log("HTTPS peer and attestation endpoint authenticated")
-        run.consume(policy, result)
         http_client = httpx.Client(
-            transport=AppraisedTransport(session, access_token),
+            transport=ChatTransport(ScopedTransport(session), access_token),
             follow_redirects=False,
             timeout=30.0,
+            trust_env=False,
         )
-        # The SDK requires an API-key value; the scoped transport drops this
-        # placeholder Authorization header before sending a request.
         client = openai.OpenAI(
-            api_key=SDK_PLACEHOLDER_API_KEY,
+            api_key=access_token,
             base_url=f"{policy['origin']}/v1",
             http_client=http_client,
             max_retries=0,

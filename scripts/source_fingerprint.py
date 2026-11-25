@@ -6,19 +6,7 @@ from pathlib import Path
 
 
 def files(root, scope):
-    if scope == "transport":
-        base = root / "native_transport"
-        paths = list((base / "src").rglob("*.rs"))
-        paths += [
-            base / name
-            for name in ("Cargo.toml", "Cargo.lock", "build.rs", "pyproject.toml")
-            if (base / name).is_file()
-        ]
-        paths += [root / "scripts/source_fingerprint.py"]
-        supplement_dir = root / "third_party"
-        paths += [p for p in supplement_dir.rglob("*") if p.is_file()]
-        dirs = [base / "src", supplement_dir]
-    elif scope == "application":
+    if scope == "application":
         paths = [
             root / name
             for name in (
@@ -26,7 +14,7 @@ def files(root, scope):
                 "Makefile",
                 "Dockerfile",
                 "requirements.lock",
-                "confido-wheel.json",
+                "confido-client-wheel.json",
             )
         ]
         dirs = [root / "demo", root / "scripts"]

@@ -1,4 +1,4 @@
-"""Rebuild stale development artifacts; subsequent chat starts in a fresh process."""
+"""Refresh a stale development wheel; subsequent chat starts in a fresh process."""
 
 import subprocess
 import sys
@@ -13,7 +13,7 @@ check = subprocess.run(
 )
 if check.returncode:
     print(check.stderr.strip() or check.stdout.strip(), flush=True)
-    print("Updating native runtime for this checkout…", flush=True)
+    print("Updating the pinned Confido client runtime…", flush=True)
     subprocess.run(
         ["make", "dev-update", f"VENV={sys.prefix}"],
         cwd=root,

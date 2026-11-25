@@ -1,7 +1,6 @@
 """Check the installed client and, optionally, its external attestation endpoint."""
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -18,20 +17,24 @@ def main():
 
     runtime = ensure_runtime()
     print(
-        "PASS: installed verifier and transport pipeline "
+        "PASS: installed Confido client pipeline "
         + str(runtime["pipeline_revision"])
     )
     if args.online:
         if not args.policy:
             parser.error("--online requires --policy")
-        from demo import admission, collection
+        import confido_client
+        from demo import admission, policy as app_policy
 
-        policy = collection.load_policy(args.policy)
-        run = collection.collect_and_verify(policy)
-        result = run.result
-        admission.authenticate(policy, result, run=run)
-        run.consume(policy, result)
-        print(json.dumps(result, indent=2))
+        policy = app_policy.load_policy(args.policy)
+        attempt = confido_client.appraise(
+            policy["origin"],
+            policy["verifier_bytes"],
+            policy.get("allow_untrusted_bootstrap", False),
+        )
+        result = attempt.result
+        admission.authenticate(policy, result, attempt=attempt)
+        print("Evidence status:", result["status"])
         print("PASS: compatible report and intended HTTPS peer")
     print("Client check complete; no inference request sent.")
 

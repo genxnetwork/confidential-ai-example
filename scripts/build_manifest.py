@@ -9,7 +9,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 wheels = sorted((root / "build/wheels").glob("*.whl"))
-assert len(wheels) == 2, "Expected verifier and transport wheels"
+assert len(wheels) == 1, "Expected one Confido client wheel"
 if len(sys.argv) < 3:
     raise SystemExit("Usage: build_manifest.py DOCKER_COMMAND IMAGE_TAG")
 image = subprocess.check_output(

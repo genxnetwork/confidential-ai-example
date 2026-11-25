@@ -1,35 +1,43 @@
-"""Application credentials are released only through the admitted transport."""
+"""The chat application sends an email token only to approved API routes."""
 
 import unittest
-from unittest.mock import Mock
 
 import httpx
 
-from demo.transport import AppraisedTransport, SDK_PLACEHOLDER_API_KEY
+from demo.transport import ChatTransport
 
 
-class IdentityTransportTests(unittest.TestCase):
-    def test_replaces_sdk_placeholder_only_for_chat_api(self):
-        session = Mock()
-        session.request.return_value = (200, [], b"{}")
-        transport = AppraisedTransport(session, "test-access-token")
-        request = httpx.Request("GET", "https://match.demo.genxt.network/v1/models",
-                                headers={"Authorization": "Bearer " + SDK_PLACEHOLDER_API_KEY})
-        self.assertEqual(transport.handle_request(request).status_code, 200)
-        headers = session.request.call_args.args[2]
-        self.assertIn(("authorization", "Bearer test-access-token"), headers)
-        self.assertNotIn(("authorization", "Bearer " + SDK_PLACEHOLDER_API_KEY), headers)
+class ChatTransportTests(unittest.TestCase):
+    def test_token_and_route_gate_precedes_peer_transport(self):
+        forwarded = []
 
-    def test_rejects_unapproved_path_and_credentials(self):
-        session = Mock()
-        transport = AppraisedTransport(session, "test-access-token")
-        with self.assertRaises(ValueError):
-            transport.handle_request(httpx.Request("GET", "https://match.demo.genxt.network/tee-report"))
-        with self.assertRaises(ValueError):
-            transport.handle_request(
-                httpx.Request(
-                    "GET", "https://match.demo.genxt.network/v1/models",
-                    headers={"Authorization": "Bearer other"},
-                )
+        def respond(request):
+            forwarded.append(request)
+            return httpx.Response(200, json={"ok": True})
+
+        with httpx.Client(
+            transport=ChatTransport(httpx.MockTransport(respond), "user-token"),
+            trust_env=False,
+        ) as client:
+            response = client.get(
+                "https://example.test/v1/models",
+                headers={"Authorization": "Bearer user-token"},
             )
-        session.request.assert_not_called()
+            self.assertEqual(response.status_code, 200)
+            with self.assertRaisesRegex(ValueError, "path is not allowed"):
+                client.get(
+                    "https://example.test/tee-report",
+                    headers={"Authorization": "Bearer user-token"},
+                )
+            with self.assertRaisesRegex(ValueError, "authorization header"):
+                client.get(
+                    "https://example.test/v1/models",
+                    headers={"Authorization": "Bearer other-token"},
+                )
+
+        self.assertEqual(len(forwarded), 1)
+        self.assertEqual(forwarded[0].headers["authorization"], "Bearer user-token")
+
+
+if __name__ == "__main__":
+    unittest.main()
