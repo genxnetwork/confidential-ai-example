@@ -49,6 +49,7 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
         self.assertEqual(set(self.provider.query["scope"][0].split()),
                          set(identity.SCOPES + ["openid", "profile", "offline_access"]))
+        self.assertEqual(self.provider.query["response_mode"], ["query"])
         with patch.object(identity, "receive_response") as browser:
             recovered = self.recover()
         browser.assert_not_called()
@@ -66,6 +67,22 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(self.provider.posts[-1]["refresh_token"], "synthetic-refresh-1")
         self.assertEqual(self.recover().token(), "synthetic-access-2")
         self.assertEqual(len(self.provider.posts), 2)
+
+    def test_session_lasts_over_fifteen_minutes_with_silent_refresh(self):
+        started = 1800000000
+        now = [started]
+        self.provider.lifetime = 300
+        with (patch("time.time", side_effect=lambda: now[0]),
+              patch.object(identity, "receive_response", side_effect=lambda url, _state:
+                           self.provider.capture_authorization(url)) as browser):
+            self.sign_in()
+            for elapsed in (60, 6 * 60, 15 * 60, 20 * 60):
+                now[0] = started + elapsed
+                self.assertTrue(self.recover().token())
+            browser.assert_called_once()
+        self.assertGreater(len(self.provider.posts), 1)
+        self.assertEqual(self.provider.posts[0]["grant_type"], "authorization_code")
+        self.assertTrue(all(p["grant_type"] == "refresh_token" for p in self.provider.posts[1:]))
 
     def test_temporary_failures_preserve_cache_and_do_not_open_browser(self):
         self.provider.lifetime = -3600

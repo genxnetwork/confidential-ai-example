@@ -289,6 +289,29 @@ class AdmissionTests(unittest.TestCase):
         logoff.assert_not_called()
         forwarded.assert_not_called()
 
+    def test_api_401_preserves_identity_without_replaying_or_interactive_login(self):
+        auth = synthetic_session("synthetic-token", float("inf"), "Test user")
+        forwarded = Mock(return_value=httpx.Response(
+            401, json={"error": {"message": "synthetic-private-server-body"}}))
+        client = demo.openai.OpenAI(
+            api_key=auth.token, base_url="https://example.test/v1", max_retries=0,
+            http_client=httpx.Client(transport=httpx.MockTransport(forwarded), trust_env=False),
+        )
+        output = io.StringIO()
+        with (patch.object(demo, "ensure_runtime", return_value={}),
+              patch.object(demo.identity, "authenticate", return_value=auth) as login,
+              patch.object(demo.identity, "logoff") as logoff,
+              patch.object(demo, "setup_client", return_value=client),
+              patch("builtins.input", side_effect=["1", "synthetic prompt", "0"]),
+              contextlib.redirect_stdout(output)):
+            self.assertEqual(demo.main(), 0)
+        login.assert_called_once()
+        logoff.assert_not_called()
+        forwarded.assert_called_once()
+        self.assertIn("Saved sign-in kept", output.getvalue())
+        self.assertNotIn("Sign-in expired", output.getvalue())
+        self.assertNotIn("synthetic-private-server-body", output.getvalue())
+
     def test_failed_logoff_returns_safe_failure_without_starting_another_login(self):
         auth = synthetic_session("synthetic-access", float("inf"), "user")
         errors = io.StringIO()

@@ -1,7 +1,7 @@
 # Users run the final image; the tests stage checks the application.
 FROM python:3.15.2-slim-bookworm@sha256:498829c717b1e59fc42f0e7865eafe4e04ca0f70a3769d4ae70ba218df54507c AS runtime
 ENV PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    XDG_STATE_HOME=/state CONFIDO_AUTH_CALLBACK_BIND=0.0.0.0 \
+    XDG_STATE_HOME=/state CONFIDO_CALLBACK_BIND=0.0.0.0 \
     CONFIDO_POLICY_DIR=/app/genoa-profiles
 WORKDIR /app
 COPY requirements.lock /app/

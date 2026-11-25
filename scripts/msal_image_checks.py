@@ -52,8 +52,7 @@ def check_image(image, docker):
                 response = json.loads(ready.removeprefix("CALLBACK_READY "))
                 # This is the synthetic fixture's response, never a live auth code.
                 from urllib.parse import urlencode
-                request = Request("http://" + address + "/", data=urlencode(response).encode(),
-                                  headers={"Content-Type": "application/x-www-form-urlencoded"})
+                request = Request("http://" + address + "/?" + urlencode(response))
                 with urlopen(request, timeout=10) as reply:
                     if reply.status != 200:
                         raise RuntimeError("Packaged callback rejected the fixture")

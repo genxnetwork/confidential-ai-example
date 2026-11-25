@@ -126,6 +126,29 @@ class CallbackTests(unittest.TestCase):
             self.assertEqual(future.result(timeout=2), {"state": "expected-state", "code": "synthetic-code"})
         self.run_callback(exercise)
 
+    def test_query_redirect_is_bounded_state_checked_and_not_reflected(self):
+        def exercise(address, future):
+            for query in ("state=other&code=wrong", "state=expected-state&code=a&code=b",
+                          "state=expected-state&code=" + "x" * 16384):
+                self.assertEqual(self.get(address, "/?" + query)[0], 400)
+                self.assertFalse(future.done())
+            connection = HTTPConnection(*address, timeout=2)
+            try:
+                connection.request("GET", "/?state=expected-state&code=synthetic-private-code")
+                response = connection.getresponse()
+                body = response.read().decode()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.getheader("Referrer-Policy"), "no-referrer")
+                self.assertEqual(response.getheader("Cache-Control"), "no-store")
+                self.assertIn(callback.CALLBACK_SCRIPT_HASH,
+                              response.getheader("Content-Security-Policy"))
+                self.assertIn(callback.CALLBACK_SCRIPT, body)
+                self.assertNotIn("synthetic-private-code", body)
+                self.assertEqual(future.result(timeout=2)["code"], "synthetic-private-code")
+            finally:
+                connection.close()
+        self.run_callback(exercise)
+
     def test_browser_preconnection_does_not_extend_deadline(self):
         now = [0.0]
         clock = SimpleNamespace(monotonic=lambda: now[0])

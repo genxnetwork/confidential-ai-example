@@ -135,10 +135,21 @@ The previous raw-token `session.json` is not imported. On the first launch after
 this update, sign in once again. The old file remains if sign-in is declined or
 fails; successful MSAL sign-in removes it. Existing run archives are preserved.
 
-The callback uses `http://localhost:8765` and MSAL's `form_post` response mode.
+The callback uses `http://localhost:8765` and MSAL's authorization-code `query`
+response mode with PKCE. This avoids an HTTPS-to-HTTP form submission prompt in
+Safari. Only a one-use code returns through the loopback URL; MSAL exchanges it
+for tokens over HTTPS. The landing page clears the query from browser history,
+does not reflect the code, and disables referrer forwarding and caching.
 Docker publishes it on host loopback only. Sign-in and restored sessions still
 require the application's evidence appraisal and HTTPS peer checks before any
 Flint API token is forwarded.
+
+The application has no short session timeout. MSAL reuses cached tokens and
+silently renews expired tokens, subject to Entra's session and revocation policy.
+An API HTTP 401 preserves the saved identity and reports an API rejection; only
+MSAL's explicit interaction-required response starts sign-in recovery. API
+requests are never automatically replayed. Tests exercise silent recovery over
+20 minutes with five-minute tokens and controlled time.
 
 For automated packaged-image checks, build the image, then run from this root:
 

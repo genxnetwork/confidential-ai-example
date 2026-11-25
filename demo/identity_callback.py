@@ -7,6 +7,8 @@ PKCE validation. No token request or token decoding happens here.
 import os
 import re
 import secrets
+import base64
+import hashlib
 import threading
 import time
 import webbrowser
@@ -16,6 +18,8 @@ from urllib.parse import parse_qs, urlparse
 SIGN_IN_TIMEOUT = 180
 CALLBACK_PORT = 8765
 BROWSER_FALLBACK_SECONDS = 5
+CALLBACK_SCRIPT = "history.replaceState(null, '', '/');"
+CALLBACK_SCRIPT_HASH = base64.b64encode(hashlib.sha256(CALLBACK_SCRIPT.encode()).digest()).decode()
 
 
 def show_authorization_url(url):
@@ -52,7 +56,7 @@ def receive_response(url, state):
             self.connection.settimeout(1.0)
 
         def do_POST(self):
-            """Accept only a bounded form response; MSAL validates its OAuth meaning."""
+            """Retain bounded form delivery for already-open sign-in pages."""
             status = 400
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -60,28 +64,41 @@ def receive_response(url, state):
                         or self.headers.get_content_type() != "application/x-www-form-urlencoded"):
                     raise ValueError("Unsupported callback body")
                 body = self.rfile.read(length).decode("utf-8")
-                params = parse_qs(body, keep_blank_values=True, max_num_fields=16)
-                with answer_lock:
-                    # Reject mismatches without consuming the active login. The
-                    # first valid response wins even with concurrent requests.
-                    if (urlparse(self.path).path == "/"
-                            and params.get("state") == [state]
-                            and all(len(values) == 1 for values in params.values())
-                            and not received.is_set()
-                            and time.monotonic() < deadline):
-                        answer.update({key: values[0] for key, values in params.items()})
-                        received.set()
-                        status = 200 if answer.get("code") else 400
+                if urlparse(self.path).path == "/":
+                    status = self.accept_response(body)
             except (ValueError, UnicodeError, OSError):
                 pass
+            self.reply(status)
+
+        def accept_response(self, raw):
+            """Reserve the first bounded, state-matching response for MSAL validation."""
+            if len(raw.encode("utf-8")) > 16384:
+                return 400
+            params = parse_qs(raw, keep_blank_values=True, max_num_fields=16, errors="strict")
+            with answer_lock:
+                if (params.get("state") == [state]
+                        and all(len(values) == 1 for values in params.values())
+                        and not received.is_set() and time.monotonic() < deadline):
+                    answer.update({key: values[0] for key, values in params.items()})
+                    received.set()
+                    return 200 if answer.get("code") else 400
+            return 400
+
+        def reply(self, status):
+            """Do not reflect codes; clear the loopback query from browser history."""
             self.send_response(status)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy",
+                             f"default-src 'none'; script-src 'sha256-{CALLBACK_SCRIPT_HASH}'")
             self.end_headers()
-            self.wfile.write(b"Return to the console." if status == 200 else b"Sign-in failed.")
+            message = "Response received. Return to the console." if status == 200 else "Sign-in failed."
+            self.wfile.write(("<!doctype html><meta charset=utf-8>"
+                              f"<script>{CALLBACK_SCRIPT}</script><p>{message}</p>").encode())
 
         def do_GET(self):
-            """Deliver the host browser to MSAL; OAuth responses still require POST."""
+            """Handle the host handoff or a native auth-code redirect with PKCE."""
             path = urlparse(self.path).path
             browser_path = "/browser/" + handoff
             if (handoff and path in (browser_path, browser_path + "/ready")
@@ -97,12 +114,20 @@ def receive_response(url, state):
                 if not opening:
                     self.wfile.write(handoff_flow)
                 return
-            self.send_error(400, "A form callback is required")
+            status = 400
+            try:
+                if path == "/":
+                    status = self.accept_response(urlparse(self.path).query)
+            except (ValueError, UnicodeError):
+                pass
+            self.reply(status)
 
         def log_message(self, *_args):
             pass
 
-    bind = os.environ.get("CONFIDO_AUTH_CALLBACK_BIND", "127.0.0.1")
+    # New name describes a listen address, avoiding Docker's AUTH-name secret heuristic.
+    bind = os.environ.get("CONFIDO_CALLBACK_BIND",
+                          os.environ.get("CONFIDO_AUTH_CALLBACK_BIND", "127.0.0.1"))
     if bind not in ("127.0.0.1", "0.0.0.0"):
         raise RuntimeError("Unsupported sign-in callback bind address")
     try:

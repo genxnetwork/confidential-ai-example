@@ -24,7 +24,7 @@ upstream client wheel. Native developers with a prepared `.venv` can use `make t
 For runtime-only native checks, use `.venv/bin/python -m unittest discover -s tests -v`.
 Enrollment tests and Python cryptography moved to `../../sanctio/`.
 
-`test_identity_callback.py` exercises bounded form callbacks, state filtering,
+`test_identity_callback.py` exercises bounded query and legacy form callbacks, state filtering,
 browser preconnections, the sign-in deadline, host handoff and manual-link fallback.
 `identity_provider.py` supplies
 synthetic HTTP responses to the real MSAL library. The opt-in packaged-image

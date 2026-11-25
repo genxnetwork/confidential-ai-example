@@ -24,9 +24,21 @@ Temporary identity-service or network failures keep the saved session. A confirm
 OAuth rejection offers a new sign-in. Empty or incomplete acquisition results
 preserve the cache and withhold the request. Legacy `session.json` credentials
 require one new sign-in and are removed only after successful MSAL acquisition.
-The application receives a bounded `form_post` callback and passes it to MSAL
-for state, nonce and PKCE handling. Sign-in allows 180 seconds for the browser
+The application receives a bounded authorization-code query redirect and passes
+it to MSAL for state, nonce and PKCE handling. Code exchange stays on HTTPS;
+the local HTML page removes the query from browser history and sends no referrer.
+Legacy form POST callbacks remain accepted for already-open sign-in pages.
+Sign-in allows 180 seconds for the browser
 callback; an incomplete browser connection does not block that deadline.
+
+The query response is an intentional native-client choice: an HTTPS form POST
+to the HTTP loopback receiver prompts Safari for confirmation. Trusted local
+HTTPS would require host certificate provisioning and redirect-registration
+changes. MSAL's generic recommendation for `form_post` can still appear as a
+Python warning; no warning filters are installed. Only a one-use code traverses
+the loopback URL, guarded by PKCE and state. The callback serves no external
+resources, sets `Referrer-Policy: no-referrer` and clears the URL query. See
+[MSAL's response-mode contract](https://msal-python.readthedocs.io/en/stable/#msal.ClientApplication.initiate_auth_code_flow).
 
 The Docker launchers open the browser on the host. A per-launch local handoff
 path becomes available only after the callback listener has started, then
@@ -34,8 +46,11 @@ redirects the browser to MSAL's authorization URL. Each interactive flow has its
 own readiness marker so later reauthentication can open the browser again.
 The console shows the full authorization URL only if this navigation has not
 occurred within five seconds, or when automatic opening is unavailable/disabled.
-This handoff never accepts OAuth codes: the actual response still requires
-MSAL's bounded, state-matching form POST.
+The handoff path never accepts OAuth codes: the actual response must reach the
+bounded, state-matching root callback. The listener uses `CONFIDO_CALLBACK_BIND`
+(`0.0.0.0` inside the image, loopback by default natively). The old
+`CONFIDO_AUTH_CALLBACK_BIND` name remains a native fallback; the new name wins
+if both are set.
 
 Fatal startup errors return a nonzero exit status. Request errors show a safe
 classification or HTTP status without printing server error bodies or tokens.

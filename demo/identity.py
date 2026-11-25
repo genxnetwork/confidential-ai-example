@@ -197,7 +197,7 @@ def sign_in(app):
     """Use MSAL's auth-code APIs with the application's Docker callback receiver."""
     try:
         flow = app.initiate_auth_code_flow(
-            SCOPES, redirect_uri=REDIRECT, prompt="select_account", response_mode="form_post",
+            SCOPES, redirect_uri=REDIRECT, prompt="select_account", response_mode="query",
         )
         response = receive_response(flow["auth_uri"], flow["state"])
         with cached_operation(app):

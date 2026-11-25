@@ -258,7 +258,9 @@ def chat_loop(client):
             conversation.append({"role": "assistant", "content": assistant_response})
 
         except openai.AuthenticationError:
-            raise identity.AuthenticationRequired("Sign-in was rejected") from None
+            print("\nAPI rejected the access token (HTTP 401). Saved sign-in kept. "
+                  "Check the API's token validation and access configuration.")
+            return
         except identity.AuthenticationRequired:
             raise
         # Keep an admitted chat session usable after one failed API call.
