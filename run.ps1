@@ -47,5 +47,46 @@ if ($env:CONFIDO_POLICY_DIR) {
     $policies = (Resolve-Path -LiteralPath $env:CONFIDO_POLICY_DIR).ProviderPath
     $dockerArgs += @('--mount', "type=bind,source=$policies,target=/policies,readonly", '--env', 'CONFIDO_POLICY_DIR=/policies')
 }
-& docker @dockerArgs $image
-exit $LASTEXITCODE
+$browserMode = if (Test-Path Env:CONFIDO_BROWSER) { $env:CONFIDO_BROWSER } else { 'auto' }
+if ($browserMode -notin @('auto', 'manual')) { throw 'CONFIDO_BROWSER must be auto or manual.' }
+$browserJob = $null
+try {
+    if ($browserMode -eq 'auto' -and $env:OS -eq 'Windows_NT') {
+        $handoff = [Guid]::NewGuid().ToString('N')
+        try {
+            $browserJob = Start-Job -ErrorAction Stop -ArgumentList $handoff -ScriptBlock {
+                param($handoff)
+                $url = "http://localhost:8765/browser/$handoff"
+                $lastFlow = ''
+                while ($true) {
+                    try {
+                        $request = [System.Net.WebRequest]::Create("$url/ready")
+                        $request.Proxy = $null
+                        $request.Timeout = 1000
+                        $response = $request.GetResponse()
+                        $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                        try { $flow = $reader.ReadToEnd() }
+                        finally { $reader.Dispose(); $response.Close() }
+                    } catch {
+                        Start-Sleep -Seconds 1
+                        continue
+                    }
+                    if ($flow -and $flow -ne $lastFlow) {
+                        try { Start-Process $url -ErrorAction Stop } catch { return }
+                        $lastFlow = $flow
+                    }
+                    Start-Sleep -Seconds 1
+                }
+            }
+            $dockerArgs += @('--env', "CONFIDO_BROWSER_HANDOFF=$handoff")
+        } catch { $browserJob = $null }
+    }
+    & docker @dockerArgs $image
+    $status = $LASTEXITCODE
+} finally {
+    if ($null -ne $browserJob) {
+        Stop-Job $browserJob
+        Remove-Job $browserJob -Force
+    }
+}
+exit $status

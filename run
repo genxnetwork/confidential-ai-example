@@ -43,4 +43,50 @@ if [ -n "${CONFIDO_POLICY_DIR:-}" ]; then
     set -- "$@" --mount "type=bind,source=$policies,target=/policies,readonly" \
         --env CONFIDO_POLICY_DIR=/policies
 fi
-exec docker "$@" "$image"
+case "${CONFIDO_BROWSER-auto}" in
+    auto|manual) ;;
+    *) printf '%s\n' 'CONFIDO_BROWSER must be auto or manual.' >&2; exit 2 ;;
+esac
+opener=
+if [ "${CONFIDO_BROWSER-auto}" = auto ] && command -v curl >/dev/null 2>&1; then
+    case "$(uname -s)" in
+        Darwin) if command -v open >/dev/null 2>&1; then opener=open; fi ;;
+        Linux) if command -v xdg-open >/dev/null 2>&1; then opener=xdg-open; fi ;;
+    esac
+fi
+if [ -z "$opener" ]; then exec docker "$@" "$image"; fi
+
+# A per-launch path prevents a listener left by another run from opening a login.
+# The launcher opens only a local URL; MSAL constructs the OAuth URL in the image.
+if ! handoff_dir=$(mktemp -d "${TMPDIR:-/tmp}/confido-browser.XXXXXXXXXX"); then
+    exec docker "$@" "$image"
+fi
+handoff=${handoff_dir##*/}
+browser_pid=
+launcher_pid=$$
+cleanup_browser() {
+    if [ -n "$browser_pid" ]; then
+        kill "$browser_pid" 2>/dev/null || true
+        wait "$browser_pid" 2>/dev/null || true
+    fi
+    rmdir "$handoff_dir" 2>/dev/null || true
+}
+trap cleanup_browser 0
+(
+    browser_url="http://localhost:8765/browser/$handoff"
+    last_flow=
+    while kill -0 "$launcher_pid" 2>/dev/null; do
+        if flow=$(curl --noproxy '*' --connect-timeout 1 --max-time 1 --fail --silent \
+            "$browser_url/ready"); then
+            if [ -n "$flow" ] && [ "$flow" != "$last_flow" ]; then
+                "$opener" "$browser_url" || exit
+                last_flow=$flow
+            fi
+        fi
+        sleep 1
+    done
+) >/dev/null 2>&1 &
+browser_pid=$!
+status=0
+docker "$@" --env "CONFIDO_BROWSER_HANDOFF=$handoff" "$image" || status=$?
+exit "$status"

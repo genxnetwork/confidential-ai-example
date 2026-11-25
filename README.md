@@ -43,9 +43,17 @@ Windows PowerShell or Command Prompt:
 The launcher downloads `ghcr.io/genxnetwork/confidential-ai-example:latest` once
 and reuses it on subsequent starts. It starts the Genoa demo, publishes the
 sign-in callback only on host loopback port 8765, and persists sign-in and run
-archives in the Docker volume `confidential-ai-example-state`. Open the printed
-sign-in link in a browser on the same host. At the next launch, the console shows
-the saved identity and offers to continue or log off.
+archives in the Docker volume `confidential-ai-example-state`. The launcher opens
+the host's default browser when sign-in is needed. If the sign-in page is not
+reached within five seconds, the console prints the full link for manual opening.
+At the next launch, the console shows the saved identity and offers to continue
+or log off.
+
+Automatic opening uses `open` on macOS, `xdg-open` on Linux (both with `curl`),
+and the default URL handler on Windows. Without an opener, use the printed link.
+Set `CONFIDO_BROWSER=manual` to always show the link, for example over SSH or
+with a remote Docker host. The browser must reach that host through
+`localhost:8765` in either mode.
 
 `./run --setup` downloads the image without signing in; `./run --info` shows its
 installed Confido build. `./run --update` explicitly pulls a newer image and
@@ -153,6 +161,14 @@ without a browser prompt. Also exercise local logoff and a new sign-in. The host
 browser must reach the Docker host's localhost port 8765; forward that port when
 using a remote Docker host. Live sign-in remains operator-run. The [dated image acceptance](docs/msal-image-acceptance-20261125.md)
 records automated results and their limits.
+
+An `unknown` label on Entra's browser account picker is separate from this
+console's identity label. Check the external-tenant user's `displayName` and the
+user flow's **Display Name** attribute; **Given Name** and **Surname** are separate
+fields. If the browser retained an old account label, sign out on the provider's
+page and sign in again after correcting the profile. Local demo logoff only
+clears the application's token cache. See Microsoft's
+[user profile attributes](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-user-attributes).
 
 ## Developer checks
 

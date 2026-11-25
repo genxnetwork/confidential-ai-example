@@ -25,7 +25,8 @@ For runtime-only native checks, use `.venv/bin/python -m unittest discover -s te
 Enrollment tests and Python cryptography moved to `../../sanctio/`.
 
 `test_identity_callback.py` exercises bounded form callbacks, state filtering,
-browser preconnections and the sign-in deadline. `identity_provider.py` supplies
+browser preconnections, the sign-in deadline, host handoff and manual-link fallback.
+`identity_provider.py` supplies
 synthetic HTTP responses to the real MSAL library. The opt-in packaged-image
 check is documented in the root README and uses `identity_image_probe.py` across
 fresh containers. These fixtures never use live credentials.

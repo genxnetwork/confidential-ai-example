@@ -5,6 +5,8 @@ PKCE validation. No token request or token decoding happens here.
 """
 
 import os
+import re
+import secrets
 import threading
 import time
 import webbrowser
@@ -13,11 +15,16 @@ from urllib.parse import parse_qs, urlparse
 
 SIGN_IN_TIMEOUT = 180
 CALLBACK_PORT = 8765
+BROWSER_FALLBACK_SECONDS = 5
 
 
 def show_authorization_url(url):
     """Open the browser or show the link for the Docker host's browser."""
-    if webbrowser.open(url):
+    try:
+        opened = webbrowser.open(url)
+    except (OSError, webbrowser.Error):
+        opened = False
+    if opened:
         print("Complete email sign-in in your browser.")
     else:
         print("Open this sign-in URL in a browser on this machine: " + url)
@@ -33,6 +40,11 @@ def receive_response(url, state):
     received = threading.Event()
     answer_lock = threading.Lock()
     deadline = time.monotonic() + SIGN_IN_TIMEOUT
+    handoff = os.environ.get("CONFIDO_BROWSER_HANDOFF", "")
+    if handoff and not re.fullmatch(r"[a-zA-Z0-9_.-]{16,80}", handoff):
+        raise ValueError("Invalid browser handoff identifier")
+    browser_seen = threading.Event()
+    handoff_flow = secrets.token_hex(16).encode("ascii")
 
     class Callback(BaseHTTPRequestHandler):
         def setup(self):
@@ -69,7 +81,22 @@ def receive_response(url, state):
             self.wfile.write(b"Return to the console." if status == 200 else b"Sign-in failed.")
 
         def do_GET(self):
-            """Do not accept codes in URLs; this application requests form_post."""
+            """Deliver the host browser to MSAL; OAuth responses still require POST."""
+            path = urlparse(self.path).path
+            browser_path = "/browser/" + handoff
+            if (handoff and path in (browser_path, browser_path + "/ready")
+                    and time.monotonic() < deadline):
+                opening = path == browser_path
+                self.send_response(302 if opening else 200)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "0" if opening else str(len(handoff_flow)))
+                if opening:
+                    self.send_header("Location", url)
+                    browser_seen.set()
+                self.end_headers()
+                if not opening:
+                    self.wfile.write(handoff_flow)
+                return
             self.send_error(400, "A form callback is required")
 
         def log_message(self, *_args):
@@ -85,8 +112,17 @@ def receive_response(url, state):
         raise RuntimeError("Local sign-in port 8765 is unavailable") from exc
     server.timeout = 1
     try:
-        show_authorization_url(url)
+        if handoff:
+            print("Opening sign-in in your browser...", flush=True)
+        else:
+            show_authorization_url(url)
+        fallback_at = time.monotonic() + BROWSER_FALLBACK_SECONDS
+        fallback_shown = False
         while not received.is_set():
+            if (handoff and not browser_seen.is_set() and not fallback_shown
+                    and time.monotonic() >= fallback_at):
+                print("Open this sign-in URL in a browser on this machine: " + url, flush=True)
+                fallback_shown = True
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break

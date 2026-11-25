@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-STUB = '''import json, os, sys
+STUB = '''import json, os, sys, time
 from pathlib import Path
 args = sys.argv[1:]
 root = Path(os.environ["FAKE_DOCKER_DIR"])
@@ -24,6 +24,10 @@ elif args[:2] == ["image", "inspect"]:
 elif args[0] == "pull":
     (root / "image").touch()
 elif args[0] == "run":
+    if os.environ.get("FAKE_BROWSER_WAIT"):
+        deadline = time.monotonic() + 5
+        while not (root / "opened.json").exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
     sys.exit(int(os.environ.get("FAKE_DOCKER_STATUS", "0")))
 '''
 
@@ -53,6 +57,7 @@ class LauncherTests(unittest.TestCase):
             policies.mkdir()
             env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
                        FAKE_DOCKER_DIR=str(root), CONFIDO_IMAGE="example/demo:test",
+                       CONFIDO_BROWSER="manual",
                        CONFIDO_STATE_VOLUME="demo-test-state",
                        XDG_CACHE_HOME=str(root / "cache"), XDG_CONFIG_HOME=str(root / "config"),
                        XDG_DATA_HOME=str(root / "data"))
@@ -63,6 +68,36 @@ class LauncherTests(unittest.TestCase):
             def calls():
                 return [json.loads(row) for row in (root / "calls.jsonl").read_text().splitlines()]
             yield invoke, calls, policies
+
+    @unittest.skipIf(os.name == "nt", "Exercises the Unix host opener")
+    def test_mac_opens_only_the_local_handoff_and_preserves_docker_status(self):
+        launcher = ["sh", str(ROOT / "run")]
+        with self.docker(launcher) as (invoke, calls, policies):
+            root = policies.parent
+            for name, content in (
+                ("uname", "#!/bin/sh\nprintf 'Darwin\\n'\n"),
+                ("curl", "#!/bin/sh\nprintf 'synthetic-flow-id'\n"),
+                ("open", f'#!{sys.executable}\nimport json, sys\n'
+                         f'from pathlib import Path\nPath({str(root / "opened.json")!r}).write_text(json.dumps(sys.argv[1:]))\n'),
+            ):
+                path = root / name
+                path.write_text(content)
+                path.chmod(0o700)
+            result = invoke(CONFIDO_BROWSER="auto", FAKE_BROWSER_WAIT="1", FAKE_DOCKER_STATUS="7")
+            self.assertEqual(result.returncode, 7, result.stderr)
+            run = next(c for c in calls() if c[0] == "run")
+            handoff = next(arg.split("=", 1)[1] for arg in run if arg.startswith("CONFIDO_BROWSER_HANDOFF="))
+            self.assertEqual(json.loads((root / "opened.json").read_text()),
+                             ["http://localhost:8765/browser/" + handoff])
+
+    def test_manual_browser_mode_and_invalid_selection(self):
+        for name, launcher in self.launchers():
+            with self.subTest(launcher=name), self.docker(launcher) as (invoke, calls, _):
+                self.assertEqual(invoke(CONFIDO_BROWSER="manual").returncode, 0)
+                run = next(c for c in calls() if c[0] == "run")
+                self.assertFalse(any(arg.startswith("CONFIDO_BROWSER_HANDOFF=") for arg in run))
+                self.assertNotEqual(invoke(CONFIDO_BROWSER="invalid").returncode, 0)
+                self.assertEqual(sum(c[0] == "run" for c in calls()), 1)
 
     def test_first_launch_pulls_once_and_reuses_image_and_state(self):
         for name, launcher in self.launchers():

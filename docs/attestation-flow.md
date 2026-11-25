@@ -27,6 +27,16 @@ require one new sign-in and are removed only after successful MSAL acquisition.
 The application receives a bounded `form_post` callback and passes it to MSAL
 for state, nonce and PKCE handling. Sign-in allows 180 seconds for the browser
 callback; an incomplete browser connection does not block that deadline.
+
+The Docker launchers open the browser on the host. A per-launch local handoff
+path becomes available only after the callback listener has started, then
+redirects the browser to MSAL's authorization URL. Each interactive flow has its
+own readiness marker so later reauthentication can open the browser again.
+The console shows the full authorization URL only if this navigation has not
+occurred within five seconds, or when automatic opening is unavailable/disabled.
+This handoff never accepts OAuth codes: the actual response still requires
+MSAL's bounded, state-matching form POST.
+
 Fatal startup errors return a nonzero exit status. Request errors show a safe
 classification or HTTP status without printing server error bodies or tokens.
 
