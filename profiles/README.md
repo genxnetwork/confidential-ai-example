@@ -18,7 +18,7 @@ repositories are checked out side by side.
 | [match.json](match.json), [mismatch.json](mismatch.json) | Application policies: HTTPS origin, verifier-policy filename, and explicit untrusted bootstrap option. The Genoa console command copies these and selects different verifier files. |
 | [verifier-match.json](verifier-match.json), [verifier-mismatch.json](verifier-mismatch.json) | Matching and deliberately incompatible Milan reference pins for those two application policies. |
 | [platform-genoa-stage.json](platform-genoa-stage.json) | Observed Genoa stage platform enrollment used when generating a verifier policy. It is not a vendor certification. |
-| [reference-issuers-stage.json](reference-issuers-stage.json) | Local issuer decision for the Teraveri stage manifest. The current accepted `GENXT-manual` key and manifest are pinned here; the `GENXT` Actions/OIDC entry is a future path, not a completed endorsement. |
+| [reference-issuers-stage.json](reference-issuers-stage.json) | Local issuer decision for the Teraveri stage manifest. The accepted `GENXT-manual` key and manifest are pinned here. The separate `GENXT` Actions/OIDC entry does not endorse this manifest. |
 | [verifier-genoa-stage-registry.json](verifier-genoa-stage-registry.json) | Positive Genoa stage policy generated from a publisher-authenticated stage candidate at a full commit and content digest; this is not an independently approved production baseline. |
 | [verifier-genoa-stage-mismatch.json](verifier-genoa-stage-mismatch.json) | Negative Genoa stage policy with the same platform constraints and a pinned Teraveri test fixture whose `nf_tables.ko` and `bridge.ko` file digests differ. The fixture is not an endorsed enrollment. |
 

@@ -1,9 +1,9 @@
 # Attestation and admission flow
 
 Chat uses a preconfigured OpenAI-compatible service after evidence and HTTPS
-peer checks. The [root README](../README.md) identifies the current model alias
-and planned model update. Replies are buffered and capped at 256 generated
-tokens within the Confido transport's 30-second request budget. Inference runs
+peer checks. The [root README](../README.md) describes launch and chat behavior.
+Replies are buffered and capped at 256 generated tokens within the Confido
+transport's 30-second request budget. Inference runs
 outside the appraised VM and is outside its attestation coverage.
 
 The [policy catalog](../profiles/README.md) identifies the enrolled references,
@@ -23,8 +23,9 @@ when possible. The same sign-in is reused when switching endpoints and restartin
 or updating the container. Archives live under `/state/confidential-ai-example/runs/`.
 Temporary identity-service or network failures keep the saved session. A confirmed
 OAuth rejection offers a new sign-in. Empty or incomplete acquisition results
-preserve the cache and withhold the request. Legacy `session.json` credentials
-require one new sign-in and are removed only after successful MSAL acquisition.
+preserve the cache and withhold the request. A legacy `session.json` file cannot
+restore a session; successful interactive sign-in removes it. Declining or
+failing sign-in preserves that file.
 The application receives a bounded authorization-code query redirect and passes
 it to MSAL for state, nonce and PKCE handling. Code exchange stays on HTTPS;
 the local HTML page removes the query from browser history and sends no referrer.
@@ -33,11 +34,8 @@ Sign-in allows 180 seconds for the browser
 callback; an incomplete browser connection does not block that deadline.
 
 The query response is an intentional native-client choice: an HTTPS form POST
-to the HTTP loopback receiver prompts Safari for confirmation. Trusted local
-HTTPS would require host certificate provisioning and redirect-registration
-changes. MSAL's generic recommendation for `form_post` can still appear as a
-Python warning; no warning filters are installed. Only a one-use code traverses
-the loopback URL, guarded by PKCE and state. The callback serves no external
+to the HTTP loopback receiver can prompt Safari for confirmation. Only a one-use
+code traverses the loopback URL, guarded by PKCE and state. The callback serves no external
 resources, sets `Referrer-Policy: no-referrer` and clears the URL query. See
 [MSAL's response-mode contract](https://msal-python.readthedocs.io/en/stable/#msal.ClientApplication.initiate_auth_code_flow).
 

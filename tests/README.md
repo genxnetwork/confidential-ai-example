@@ -22,7 +22,6 @@ upstream client wheel. Native developers with a prepared `.venv` can use `make t
 | [`test_runtime.py`](test_runtime.py) | Public client API and verifier pipeline compatibility. |
 
 For runtime-only native checks, use `.venv/bin/python -m unittest discover -s tests -v`.
-Enrollment tests and Python cryptography moved to `../../sanctio/`.
 
 `test_identity_callback.py` exercises bounded query and legacy form callbacks, state filtering,
 browser preconnections, the sign-in deadline, host handoff and manual-link fallback.

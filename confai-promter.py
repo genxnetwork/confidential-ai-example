@@ -215,8 +215,8 @@ def setup_client(endpoint, auth, *, runtime=None):
     )
     show_result(result, admitted=True)
     print(
-        "Inference: Llama runs in Azure AI Foundry via Flint; the VM's "
-        "attestation does not cover the Azure model, runtime or output."
+        "Inference runs outside the appraised VM; its attestation does not "
+        "cover the model, inference runtime or output."
     )
     return client
 

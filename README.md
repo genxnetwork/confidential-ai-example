@@ -1,30 +1,25 @@
 # Confidential AI example
 
-A client-side demonstration of how an application can use attestation before
-sending an application request. In isolated tests, the matching case sends one
-synthetic request after evidence and TLS-peer checks; the deliberately
-mismatched reference causes the application to deny it. This demonstrates the
-decision flow, not the integrity of the application, GPU, model, or inference
-runtime. See Confido's
+A console demo that verifies attestation evidence and authenticates the HTTPS
+peer before sending a chat request. The application selects a local policy,
+uses [JAN Confido](https://github.com/jandigitrust/confido) for evidence and peer
+checks, and makes its own admission decision.
+
+The supplied Genoa stage policies cover the VM's enrolled boot aggregate and
+kernel modules. They do not attest application code, the model, GPU state or
+inference output. Inference runs outside the appraised VM. TLS session binding
+and relay resistance are unsupported. See the
+[attestation flow](docs/attestation-flow.md) and Confido's
 [security model](https://github.com/jandigitrust/confido/blob/main/docs/security-model.md)
-for the underlying trust chain and terminology.
+for the trust boundaries. This is a development and staging example using an
+alpha SDK; production use is unsupported.
 
-This is a development and staging example using an alpha SDK. Production use
-is unsupported.
+## Run the demo
 
-A cooperating client separates evidence verification from application admission.
-The installed [JAN Confido](https://github.com/jandigitrust/confido) client wheel
-retrieves the report and pinned reference, appraises evidence, and authenticates
-the HTTPS peer. `demo/admission.py` applies the application's policy before chat;
-`demo/transport.py` limits where the user's access token can be sent.
-The component guides cover [`demo/`](demo/README.md),
-[`scripts/`](scripts/README.md), and [`tests/`](tests/README.md).
-
-## Current Genoa demo
-
-Install and start Docker with Linux containers. On macOS and Windows this is
-normally Docker Desktop. Python, Rust, make and model weights are not required
-on the user's machine.
+Install and start Docker with Linux containers. On macOS and Windows, use Docker
+Desktop. The image targets `linux/amd64`; Apple Silicon uses Docker's architecture
+emulation. Host Python, Rust and model weights are not required. Host loopback
+port 8765 must be available for browser sign-in.
 
 Linux / macOS:
 
@@ -38,185 +33,122 @@ Windows PowerShell or Command Prompt:
 .\run.cmd
 ```
 
-The launcher downloads `ghcr.io/genxnetwork/confidential-ai-example:latest` once
-and reuses it on subsequent starts. It starts the Genoa demo, publishes the
-sign-in callback only on host loopback port 8765, and persists sign-in and run
-archives in the Docker volume `confidential-ai-example-state`. The launcher opens
-the host's default browser when sign-in is needed. If the sign-in page is not
-reached within five seconds, the console prints the full link for manual opening.
-At the next launch, the console shows the saved identity and offers to continue
-or log off.
+The launcher uses the selected local image if present, otherwise pulls it.
+The default image is `ghcr.io/genxnetwork/confidential-ai-example:latest`.
+To run a local build or another published tag, set `CONFIDO_IMAGE` as described
+below. Registry pulls require that the selected tag exists and is accessible.
 
-Automatic opening uses `open` on macOS, `xdg-open` on Linux (both with `curl`),
-and the default URL handler on Windows. Without an opener, use the printed link.
-Set `CONFIDO_BROWSER=manual` to always show the link, for example over SSH or
-with a remote Docker host. The browser must reach that host through
-`localhost:8765` in either mode.
+1. Sign in through Teraveri Identity. The launcher opens the host browser when
+   sign-in is needed; the console provides a link if automatic opening fails.
+2. Select **match** to use the matching stage policy or **mismatch** to exercise
+   rejection against a deliberately incompatible reference.
+3. Permit evidence retrieval. Chat opens only after successful evidence
+   verification and HTTPS peer authentication. Declining or failing either
+   check withholds the chat request.
+4. In chat, enter `clear` to reset the conversation, or `exit` / `quit` to return
+   to endpoint selection. Select `0` at endpoint selection to exit.
 
-`./run --setup` downloads the image without signing in; `./run --info` shows its
-installed Confido build. `./run --update` explicitly pulls a newer image and
-shows its build information. The same options work with `.\run.cmd` on Windows.
-Ordinary launches do not rebuild the image or replace the verifier dependency.
+The client uses a preconfigured OpenAI-compatible chat service. Replies are
+buffered and capped at 256 generated tokens with a concise-answer prompt.
+The client allows 30 seconds per request and does not automatically retry failures.
+Long prompts or slow generation can time out. Malformed UTF-8 input is rejected
+before sending or adding it to conversation history.
 
-This repository's image workflow builds one image, runs the application suite
-and packaged session-recovery checks, then publishes that same image to GHCR.
-The default branch supplies `latest`; other pushed branches receive their own
-image tags and commit tags. The image package must be made public after its
-first publication for anonymous pulls. A successful local build does not
-establish registry publication or anonymous pull access. Use `./run --info`
-with the selected image to inspect its installed wheel and build information.
+Browser opening uses `open` on macOS or `xdg-open` on Linux, with `curl` for the
+local handoff; Windows uses its default URL handler. Set `CONFIDO_BROWSER=manual`
+to use the printed link. The browser must reach the Docker host at
+`http://localhost:8765`, including when Docker runs remotely.
 
-Inside the image build, the GitHub API selects the latest successful main-branch
-`Client wheel` push build from [JAN Confido](https://github.com/jandigitrust/confido).
-`nightly.link` provides the download without a GitHub token. The archive SHA-256
-must match GitHub metadata before the wheel is loaded. Missing or expired
-artifacts stop the build. Installation uses `--no-index --no-deps`, and a small
-record captures the exact wheel hash, build information and GitHub run/commit.
-A running image needs neither a retained wheel nor that optional record.
+## Session and settings
 
-There is one image target: `linux/amd64`, including on Windows and Apple Silicon.
-Docker Desktop supplies the required Linux environment and architecture
-emulation on ARM Macs. Package locks therefore contain one exact wheel hash per
-version for CPython 3.15 / Linux x86_64.
+The named Docker volume `confidential-ai-example-state` stores sign-in state and
+private verification archives. Restarting or changing the image preserves this
+volume. At startup, a saved identity offers continue or local logoff. Local
+logoff removes that account from the application's cache, without signing out
+other browser applications.
 
-Overrides are optional: `CONFIDO_IMAGE` selects an image/tag,
-`CONFIDO_STATE_VOLUME` selects a separate named volume, and `CONFIDO_POLICY_DIR`
-binds a host policy directory read-only. The default image uses the checked-in
-Genoa stage policies; the application still chooses admission locally. Changing
-images or updating does not delete the state volume. Native sessions from earlier
-revisions are not automatically imported into that volume.
+MSAL silently renews tokens when possible. Temporary identity-service failures
+preserve the saved session and withhold the request. An API HTTP 401 also
+preserves sign-in and reports the rejection. Only the admitted `/v1/models` and
+`/v1/chat/completions` routes receive the user's access token.
 
-## Sign-in and admission
+The cache is an unencrypted file inside the private state volume, with `0700`
+directories and `0600` files. Keep the volume private. Browser sign-in uses an
+authorization code with PKCE through the loopback callback; the landing page
+clears the query from browser history and sends no referrer.
 
-The console signs in through Teraveri Identity before endpoint selection.
-On later launches it shows the saved identity and offers continue or local
-logoff. Tokens stay in a private session file in the Docker state volume;
-temporary renewal failures preserve that session.
+| Setting | Purpose | Default |
+| --- | --- | --- |
+| `CONFIDO_IMAGE` | Select a local image or published tag. | `ghcr.io/genxnetwork/confidential-ai-example:latest` |
+| `CONFIDO_STATE_VOLUME` | Select a separate Docker state volume. | `confidential-ai-example-state` |
+| `CONFIDO_POLICY_DIR` | Mount an application policy directory read-only. | Genoa stage policies packaged in the image. |
+| `CONFIDO_BROWSER` | Choose `auto` or `manual` browser opening. | `auto` |
+| `CONFIDO_COLOR` | Choose `always`, `auto` or `never` for console colors. | `auto` |
 
-For each selected endpoint, the application asks Confido to collect and appraise
-fresh evidence against its local policy, authenticates the quote-bound HTTPS
-peer, then creates an OpenAI client using Confido's transport. Only the admitted
-`/v1/models` and `/v1/chat/completions` routes receive the user's access token.
-A mismatch or failed peer check withholds chat. The client uses a preconfigured
-OpenAI-compatible service and sends its Entra access token only after admission.
+`./run --setup` ensures the selected image is available without signing in.
+`./run --info` shows its Confido version and build information without networking
+inside the container. `./run --update` pulls the selected image and shows its
+build information. The same options work with `.\run.cmd` on Windows.
+Use an explicit image selection consistently, including for `--info`.
 
-The selected replacement model is
-[DeepSeek V4.1 Flash 1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017),
-with MIT-licensed code and weights. The model update is pending: the current
-endpoint still serves Llama through the client's `llama-default` alias.
+For example, with a local image:
 
-Inference runs outside the appraised VM. Demo replies are capped
-at 256 generated tokens and use a concise-answer prompt. The current Confido
-transport has a 30-second request budget. The console shows when generation
-starts; responses are buffered, not streamed. Long prompts or slow generation
-can still time out. A transport failure does not trigger an automatic inference
-retry.
+```sh
+CONFIDO_IMAGE=confidential-ai-example:local ./run --info
+CONFIDO_IMAGE=confidential-ai-example:local ./run
+```
 
-Chat accepts UTF-8 text, including Cyrillic and emoji. Malformed terminal input
-is rejected before sending or adding it to conversation history; retype the
-message when prompted. If an older image keeps failing after malformed input,
-type `clear` to discard that conversation before trying again.
+## Build and verify
 
-The stage policies cover enrolled boot aggregate and kernel modules. They do
-not measure application/model/GPU integrity, attest inference output, or provide
-TLS session binding and relay resistance. Verification archives and separate
-application decisions remain private in the state volume.
+From the repository root, build the client image:
 
-See [the detailed flow](docs/attestation-flow.md) for trust boundaries, identity,
-reference pins, saved records and console output; and
-[the policy catalog](profiles/README.md) for fixture scope.
+```sh
+docker build --platform linux/amd64 -t confidential-ai-example:local .
+```
 
-## Identity implementation and session recovery
+The final image depends on the Docker test stage passing against its exact
+runtime and installed Confido wheel. `--target tests` builds through that stage
+without producing the final image. Rebuild a local image to incorporate source
+changes; ordinary launches reuse the selected image.
 
-The demo uses MSAL Python for Entra CIAM. All integration code stays in `demo/`;
-there is no Aditus dependency or additional build context. MSAL owns PKCE, token
-exchange, account metadata, and silent acquisition. The application owns its
-CIAM settings, account-selection prompts, callback delivery and admission.
+Image builds select the latest successful main-branch `Client wheel` push build
+from JAN Confido, check the downloaded archive SHA-256 against GitHub metadata,
+and validate the wheel against [`confido-client-wheel.json`](confido-client-wheel.json).
+Missing, expired or incompatible artifacts stop the build. Startup checks the
+installed client APIs, Python 3.15 and verifier pipeline 2 without installing
+dependencies. `--info` also shows installation provenance when available.
 
-MSAL serializes its token cache; MSAL Extensions supplies file persistence and
-locking. The Linux image explicitly
-uses an unencrypted file in its private state volume, with a `0700` directory,
-`0600` cache, and atomic replacement. It does not assume a desktop keychain.
-Keep the volume private. The cache is partitioned by client, authority and scopes.
-Acquisition and local logoff run under the same cache lock. Cache mutations are
-committed only on success: even MSAL's eviction of an expired access token is
-rolled back when renewal fails. Temporary failures preserve the previous file
-and withhold the application request.
-Local logoff removes the selected account from this application's cache.
+To build with an explicit compatible Linux wheel:
 
-The previous raw-token `session.json` is not imported. On the first launch after
-this update, sign in once again. The old file remains if sign-in is declined or
-fails; successful MSAL sign-in removes it. Existing run archives are preserved.
+```sh
+make build CONFIDO_CLIENT_WHEEL=/absolute/path/to/confido_client-0.2.1a1-cp315-cp315-manylinux_2_34_x86_64.whl
+```
 
-The callback uses `http://localhost:8765` and MSAL's authorization-code `query`
-response mode with PKCE. This avoids an HTTPS-to-HTTP form submission prompt in
-Safari. Only a one-use code returns through the loopback URL; MSAL exchanges it
-for tokens over HTTPS. The landing page clears the query from browser history,
-does not reflect the code, and disables referrer forwarding and caching.
-Docker publishes it on host loopback only. Sign-in and restored sessions still
-require the application's evidence appraisal and HTTPS peer checks before any
-API token is forwarded.
+In a prepared native environment, `make test` runs the application suite.
+The [scripts guide](scripts/README.md) covers dependency installation and
+preflight helpers; the [tests guide](tests/README.md) explains test scope.
 
-The application has no short session timeout. MSAL reuses cached tokens and
-silently renews expired tokens, subject to Entra's session and revocation policy.
-An API HTTP 401 preserves the saved identity and reports an API rejection; only
-MSAL's explicit interaction-required response starts sign-in recovery. API
-requests are never automatically replayed. Tests exercise silent recovery over
-20 minutes with five-minute tokens and controlled time.
-
-For automated packaged-image checks, build the image, then run from this root:
+Check packaged identity recovery with synthetic provider responses:
 
 ```sh
 python3 scripts/msal_image_checks.py --image confidential-ai-example:local
 ```
 
-The check uses synthetic identity HTTP responses with the real MSAL library,
-a real published callback, and a disposable Docker volume reused across fresh
-containers. It checks sign-in, temporary outage, silent renewal after restart,
-cached recovery and logoff. It does not establish live Entra compatibility.
-For live acceptance of a local build, use a dedicated test volume:
+For live browser and chat checks, use a dedicated state volume:
 
 ```sh
-CONFIDO_IMAGE=confidential-ai-example:local CONFIDO_STATE_VOLUME=confidential-ai-example-msal-live ./run
+CONFIDO_IMAGE=confidential-ai-example:local CONFIDO_STATE_VOLUME=confidential-ai-example-review ./run
 ```
 
-Complete browser sign-in, exit normally, then repeat the same command and continue
-without a browser prompt. Also exercise local logoff and a new sign-in. The host
-browser must reach the Docker host's localhost port 8765; forward that port when
-using a remote Docker host. Live sign-in remains operator-run; synthetic checks
-do not establish live Entra compatibility.
+Exercise match, mismatch, restart recovery and logoff using the
+[reviewer checklist](docs/attestation-flow.md#reviewer-checks). Synthetic checks
+exercise application boundaries; live identity and service compatibility require
+that separate browser-driven check.
 
-An `unknown` label on Entra's browser account picker is separate from this
-console's identity label. Check the external-tenant user's `displayName` and the
-user flow's **Display Name** attribute; **Given Name** and **Surname** are separate
-fields. If the browser retained an old account label, sign out on the provider's
-page and sign in again after correcting the profile. Local demo logoff only
-clears the application's token cache. See Microsoft's
-[user profile attributes](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-user-attributes).
-Rebuilding the demo does not update Entra directory profiles or configure
-automatic display-name generation during registration.
+The image workflow tests launchers on Linux, macOS and Windows, builds and tests
+the Linux image, checks packaged identity recovery, and publishes the checked
+image on push. The default branch supplies `latest`; other branches receive
+branch and commit tags. Publication requires successful CI and registry access.
 
-## Developer checks
-
-The user launch path only pulls and runs an image. Image builds belong to development/CI.
-`docker build --platform linux/amd64 -t confidential-ai-example:local .` builds
-the final image and requires the application tests to pass against its exact
-runtime and wheel. `--target tests` runs only through that test stage.
-
-To test an unpublished Linux wheel without a host Python installation:
-
-```sh
-make build CONFIDO_CLIENT_WHEEL=/absolute/path/to/confido_client-0.2.1a1-cp315-cp315-manylinux_2_34_x86_64.whl
-CONFIDO_IMAGE=confidential-ai-example:local ./run
-```
-
-`make build` uses Docker and a selected candidate in the ignored `.image-wheel/`
-directory. Default builds fetch the upstream wheel inside Linux; host architecture
-does not select a macOS/Windows wheel for the image. The Docker context excludes
-local environments, caches, credentials and private run archives. Native developers
-who already have a prepared `.venv` can also use `make test`.
-To update that environment to the pinned client, run
-`.venv/bin/python scripts/install_client_wheel.py`; this validates and installs
-the upstream wheel and records its origin. Then run
-`.venv/bin/python -m demo.runtime` and `make test`. Runtime startup does not
-perform this installation.
+The [application guide](demo/README.md), [policy catalog](profiles/README.md), and
+[schema catalog](schemas/README.md) describe the maintained client interfaces.
