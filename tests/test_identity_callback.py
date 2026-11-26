@@ -37,7 +37,7 @@ class CallbackTests(unittest.TestCase):
         with (patch.object(callback, "ThreadingHTTPServer", EphemeralServer),
               patch.object(callback, "show_authorization_url", side_effect=show_url),
               patch.object(callback, "time", clock or time),
-              patch.dict(callback.os.environ, CONFIDO_BROWSER_HANDOFF=handoff),
+              patch.dict(callback.os.environ, GENXT_DEMO_BROWSER_HANDOFF=handoff),
               patch("builtins.print", output or Mock()),
               patch.object(callback, "BROWSER_FALLBACK_SECONDS", 1),
               patch.object(callback, "SIGN_IN_TIMEOUT", 3),

@@ -22,7 +22,7 @@ def fetch(url):
     except (urllib.error.URLError, TimeoutError) as error:
         raise RuntimeError(
             "Cannot download Confido client wheel. Retry the Docker image build, "
-            "or run make build CONFIDO_CLIENT_WHEEL=/path/to/wheel.whl."
+            "or run make build GENXT_DEMO_CLIENT_WHEEL=/path/to/wheel.whl."
         ) from error
 
 
@@ -35,7 +35,7 @@ def artifact_name(source):
     if platform.python_implementation() != "CPython" or target not in source["artifacts"]:
         raise ValueError(
             f"No Confido client CI wheel configured for {target}. "
-            "Use a supported CPython interpreter or supply CONFIDO_CLIENT_WHEEL."
+            "Use a supported CPython interpreter or supply GENXT_DEMO_CLIENT_WHEEL."
         )
     return source["artifacts"][target]
 

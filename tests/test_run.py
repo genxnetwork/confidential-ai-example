@@ -56,12 +56,12 @@ class LauncherTests(unittest.TestCase):
             policies = root / "policies with spaces"
             policies.mkdir()
             env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
-                       FAKE_DOCKER_DIR=str(root), CONFIDO_IMAGE="example/demo:test",
-                       CONFIDO_BROWSER="manual",
-                       CONFIDO_STATE_VOLUME="demo-test-state",
+                       FAKE_DOCKER_DIR=str(root), GENXT_DEMO_IMAGE="example/demo:test",
+                       GENXT_DEMO_BROWSER="manual",
+                       GENXT_DEMO_STATE_VOLUME="demo-test-state",
                        XDG_CACHE_HOME=str(root / "cache"), XDG_CONFIG_HOME=str(root / "config"),
                        XDG_DATA_HOME=str(root / "data"))
-            env.pop("CONFIDO_POLICY_DIR", None)
+            env.pop("GENXT_DEMO_POLICY_DIR", None)
             def invoke(*args, **extra):
                 return subprocess.run(launcher + list(args), input="", text=True,
                                       capture_output=True, env=dict(env, **extra))
@@ -83,20 +83,20 @@ class LauncherTests(unittest.TestCase):
                 path = root / name
                 path.write_text(content)
                 path.chmod(0o700)
-            result = invoke(CONFIDO_BROWSER="auto", FAKE_BROWSER_WAIT="1", FAKE_DOCKER_STATUS="7")
+            result = invoke(GENXT_DEMO_BROWSER="auto", FAKE_BROWSER_WAIT="1", FAKE_DOCKER_STATUS="7")
             self.assertEqual(result.returncode, 7, result.stderr)
             run = next(c for c in calls() if c[0] == "run")
-            handoff = next(arg.split("=", 1)[1] for arg in run if arg.startswith("CONFIDO_BROWSER_HANDOFF="))
+            handoff = next(arg.split("=", 1)[1] for arg in run if arg.startswith("GENXT_DEMO_BROWSER_HANDOFF="))
             self.assertEqual(json.loads((root / "opened.json").read_text()),
                              ["http://localhost:8765/browser/" + handoff])
 
     def test_manual_browser_mode_and_invalid_selection(self):
         for name, launcher in self.launchers():
             with self.subTest(launcher=name), self.docker(launcher) as (invoke, calls, _):
-                self.assertEqual(invoke(CONFIDO_BROWSER="manual").returncode, 0)
+                self.assertEqual(invoke(GENXT_DEMO_BROWSER="manual").returncode, 0)
                 run = next(c for c in calls() if c[0] == "run")
-                self.assertFalse(any(arg.startswith("CONFIDO_BROWSER_HANDOFF=") for arg in run))
-                self.assertNotEqual(invoke(CONFIDO_BROWSER="invalid").returncode, 0)
+                self.assertFalse(any(arg.startswith("GENXT_DEMO_BROWSER_HANDOFF=") for arg in run))
+                self.assertNotEqual(invoke(GENXT_DEMO_BROWSER="invalid").returncode, 0)
                 self.assertEqual(sum(c[0] == "run" for c in calls()), 1)
 
     def test_first_launch_pulls_once_and_reuses_image_and_state(self):
@@ -132,7 +132,7 @@ class LauncherTests(unittest.TestCase):
     def test_policy_path_with_spaces_and_container_failure_are_preserved(self):
         for name, launcher in self.launchers():
             with self.subTest(launcher=name), self.docker(launcher) as (invoke, calls, policies):
-                result = invoke(CONFIDO_POLICY_DIR=str(policies), FAKE_DOCKER_STATUS="7")
+                result = invoke(GENXT_DEMO_POLICY_DIR=str(policies), FAKE_DOCKER_STATUS="7")
                 self.assertEqual(result.returncode, 7, result.stderr)
                 run = next(c for c in calls() if c[0] == "run")
                 self.assertIn(f"type=bind,source={policies},target=/policies,readonly", run)

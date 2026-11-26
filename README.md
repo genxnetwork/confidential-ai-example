@@ -1,6 +1,6 @@
 # Trustworthy AI – Verifiable and Confidential
 
-*Prototype Demo*
+## Prototype Demo
 
 A console demo that verifies attestation evidence and authenticates the HTTPS
 peer before sending a chat request. The application selects a local policy,
@@ -27,14 +27,14 @@ Linux / macOS:
 
 ```sh
 docker build --platform linux/amd64 -t confidential-ai-example:local .
-CONFIDO_IMAGE=confidential-ai-example:local ./run
+GENXT_DEMO_IMAGE=confidential-ai-example:local ./run
 ```
 
 Windows PowerShell:
 
 ```powershell
 docker build --platform linux/amd64 -t confidential-ai-example:local .
-$env:CONFIDO_IMAGE = "confidential-ai-example:local"
+$env:GENXT_DEMO_IMAGE = "confidential-ai-example:local"
 .\run.cmd
 ```
 
@@ -43,7 +43,7 @@ checkout and runs the application tests before producing the local image.
 Rebuild that image after updating the source.
 
 The launcher uses the selected local image if present, otherwise pulls it.
-`CONFIDO_IMAGE` can also select an accessible published tag. Without that
+`GENXT_DEMO_IMAGE` can also select an accessible published tag. Without that
 setting, the launcher requests
 `ghcr.io/genxnetwork/confidential-ai-example:latest`; that tag is the publication
 target for the default branch. Registry pulls require that the selected tag
@@ -66,7 +66,7 @@ Long prompts or slow generation can time out. Malformed UTF-8 input is rejected
 before sending or adding it to conversation history.
 
 Browser opening uses `open` on macOS or `xdg-open` on Linux, with `curl` for the
-local handoff; Windows uses its default URL handler. Set `CONFIDO_BROWSER=manual`
+local handoff; Windows uses its default URL handler. Set `GENXT_DEMO_BROWSER=manual`
 to use the printed link. The browser must reach the Docker host at
 `http://localhost:8765`, including when Docker runs remotely.
 
@@ -90,10 +90,10 @@ clears the query from browser history and sends no referrer.
 
 | Setting | Purpose | Default |
 | --- | --- | --- |
-| `CONFIDO_IMAGE` | Select a local image or published tag. | `ghcr.io/genxnetwork/confidential-ai-example:latest` |
-| `CONFIDO_STATE_VOLUME` | Select a separate Docker state volume. | `confidential-ai-example-state` |
-| `CONFIDO_POLICY_DIR` | Mount an application policy directory read-only. | Genoa stage policies packaged in the image. |
-| `CONFIDO_BROWSER` | Choose `auto` or `manual` browser opening. | `auto` |
+| `GENXT_DEMO_IMAGE` | Select a local image or published tag. | `ghcr.io/genxnetwork/confidential-ai-example:latest` |
+| `GENXT_DEMO_STATE_VOLUME` | Select a separate Docker state volume. | `confidential-ai-example-state` |
+| `GENXT_DEMO_POLICY_DIR` | Mount an application policy directory read-only. | Genoa stage policies packaged in the image. |
+| `GENXT_DEMO_BROWSER` | Choose `auto` or `manual` browser opening. | `auto` |
 | `CONFIDO_COLOR` | Choose `always`, `auto` or `never` for console colors. | `auto` |
 
 `./run --setup` ensures the selected image is available without signing in.
@@ -105,8 +105,8 @@ Use an explicit image selection consistently, including for `--info`.
 For example, with a local image:
 
 ```sh
-CONFIDO_IMAGE=confidential-ai-example:local ./run --info
-CONFIDO_IMAGE=confidential-ai-example:local ./run
+GENXT_DEMO_IMAGE=confidential-ai-example:local ./run --info
+GENXT_DEMO_IMAGE=confidential-ai-example:local ./run
 ```
 
 ## Build and verify
@@ -132,7 +132,7 @@ dependencies. `--info` also shows installation provenance when available.
 To build with an explicit compatible Linux wheel:
 
 ```sh
-make build CONFIDO_CLIENT_WHEEL=/absolute/path/to/confido_client-0.2.1a1-cp315-cp315-manylinux_2_34_x86_64.whl
+make build GENXT_DEMO_CLIENT_WHEEL=/absolute/path/to/confido_client-0.2.1a1-cp315-cp315-manylinux_2_34_x86_64.whl
 ```
 
 In a prepared native environment, `make test` runs the application suite.
@@ -148,7 +148,7 @@ python3 scripts/msal_image_checks.py --image confidential-ai-example:local
 For live browser and chat checks, use a dedicated state volume:
 
 ```sh
-CONFIDO_IMAGE=confidential-ai-example:local CONFIDO_STATE_VOLUME=confidential-ai-example-review ./run
+GENXT_DEMO_IMAGE=confidential-ai-example:local GENXT_DEMO_STATE_VOLUME=confidential-ai-example-review ./run
 ```
 
 Exercise match, mismatch, restart recovery and logoff using the
@@ -163,3 +163,9 @@ branch and commit tags. Publication requires successful CI and registry access.
 
 The [application guide](demo/README.md), [policy catalog](profiles/README.md), and
 [schema catalog](schemas/README.md) describe the maintained client interfaces.
+
+## Infrastructure acknowledgement
+
+Computational infrastructure is provided by
+[JAN DIGITRUST](https://www.jandigitrust.org/) under a collaboration consortium
+agreement with IIAP NAS RA and GENXT.

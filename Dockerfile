@@ -1,15 +1,15 @@
 # Users run the final image; the tests stage checks the application.
 FROM python:3.15.2-slim-bookworm@sha256:498829c717b1e59fc42f0e7865eafe4e04ca0f70a3769d4ae70ba218df54507c AS runtime
 ENV PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    XDG_STATE_HOME=/state CONFIDO_CALLBACK_BIND=0.0.0.0 \
-    CONFIDO_POLICY_DIR=/app/genoa-profiles
+    XDG_STATE_HOME=/state GENXT_DEMO_CALLBACK_BIND=0.0.0.0 \
+    GENXT_DEMO_POLICY_DIR=/app/genoa-profiles
 WORKDIR /app
 COPY requirements.lock /app/
 RUN python3 -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.lock
 COPY . /app/
-ARG CONFIDO_CLIENT_WHEEL=
-RUN if [ -n "$CONFIDO_CLIENT_WHEEL" ]; then \
-        python3 scripts/install_client_wheel.py --client-wheel "$CONFIDO_CLIENT_WHEEL"; \
+ARG GENXT_DEMO_CLIENT_WHEEL=
+RUN if [ -n "$GENXT_DEMO_CLIENT_WHEEL" ]; then \
+        python3 scripts/install_client_wheel.py --client-wheel "$GENXT_DEMO_CLIENT_WHEEL"; \
     else python3 scripts/install_client_wheel.py; fi \
     && chmod 0644 /usr/local/confido-client-install.json \
     && rm -rf /app/.image-wheel

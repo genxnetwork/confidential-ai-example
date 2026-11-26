@@ -26,7 +26,7 @@ from demo.runtime import ensure_runtime
 from demo.transport import ChatTransport
 
 POLICY_DIR = Path(
-    os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles"))
+    os.environ.get("GENXT_DEMO_POLICY_DIR", Path(__file__).with_name("profiles"))
 )
 CHAT_MODEL = "llama-default"
 CHAT_MAX_TOKENS = 256
@@ -63,7 +63,7 @@ def new_bundle_path(endpoint):
     """Create a private directory for one appraisal and its admission records."""
     state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
     default_runs = state_root / "confidential-ai-example/runs"
-    root = Path(os.environ.get("CONFIDO_RUN_DIR", default_runs))
+    root = Path(os.environ.get("GENXT_DEMO_RUN_DIR", default_runs))
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     root.chmod(0o700)
     run = root / (

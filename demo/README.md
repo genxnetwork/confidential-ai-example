@@ -5,7 +5,7 @@ presentation, token routing and admission decision. The installed Confido client
 retrieves and appraises evidence and authenticates the HTTPS peer. The application
 decides whether and when a chat request may be sent. Start the Genoa flow with `./run` (Linux/macOS) or `.\run.cmd` (Windows).
 Both run the same Linux image. The launchers persist state in a Docker volume
-and can mount an explicit host `CONFIDO_POLICY_DIR` read-only.
+and can mount an explicit host `GENXT_DEMO_POLICY_DIR` read-only.
 
 | Module | Role |
 | --- | --- |

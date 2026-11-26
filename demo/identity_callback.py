@@ -44,7 +44,7 @@ def receive_response(url, state):
     received = threading.Event()
     answer_lock = threading.Lock()
     deadline = time.monotonic() + SIGN_IN_TIMEOUT
-    handoff = os.environ.get("CONFIDO_BROWSER_HANDOFF", "")
+    handoff = os.environ.get("GENXT_DEMO_BROWSER_HANDOFF", "")
     if handoff and not re.fullmatch(r"[a-zA-Z0-9_.-]{16,80}", handoff):
         raise ValueError("Invalid browser handoff identifier")
     browser_seen = threading.Event()
@@ -125,9 +125,7 @@ def receive_response(url, state):
         def log_message(self, *_args):
             pass
 
-    # New name describes a listen address, avoiding Docker's AUTH-name secret heuristic.
-    bind = os.environ.get("CONFIDO_CALLBACK_BIND",
-                          os.environ.get("CONFIDO_AUTH_CALLBACK_BIND", "127.0.0.1"))
+    bind = os.environ.get("GENXT_DEMO_CALLBACK_BIND", "127.0.0.1")
     if bind not in ("127.0.0.1", "0.0.0.0"):
         raise RuntimeError("Unsupported sign-in callback bind address")
     try:

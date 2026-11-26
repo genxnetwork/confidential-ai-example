@@ -46,10 +46,8 @@ own readiness marker so later reauthentication can open the browser again.
 The console shows the full authorization URL only if this navigation has not
 occurred within five seconds, or when automatic opening is unavailable/disabled.
 The handoff path never accepts OAuth codes: the actual response must reach the
-bounded, state-matching root callback. The listener uses `CONFIDO_CALLBACK_BIND`
-(`0.0.0.0` inside the image, loopback by default natively). The old
-`CONFIDO_AUTH_CALLBACK_BIND` name remains a native fallback; the new name wins
-if both are set.
+bounded, state-matching root callback. The listener uses `GENXT_DEMO_CALLBACK_BIND`
+(`0.0.0.0` inside the image, loopback by default natively).
 
 Fatal startup errors return a nonzero exit status. Request errors show a safe
 classification or HTTP status without printing server error bodies or tokens.
