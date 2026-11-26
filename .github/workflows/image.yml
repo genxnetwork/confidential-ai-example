@@ -1,14 +1,12 @@
 name: Demo image
 on:
-  pull_request:
-  push:
   workflow_dispatch:
 permissions:
   contents: read
-# Serialize publication for a ref; superseded PR checks can be cancelled.
+# Serialize manually requested publication for a ref.
 concurrency:
   group: demo-image-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 jobs:
   launchers:
     timeout-minutes: 10
@@ -62,7 +60,6 @@ jobs:
         run: python3 scripts/msal_image_checks.py --image confidential-ai-example:ci
       - name: Check publication ref
         id: release
-        if: github.event_name != 'pull_request'
         env:
           SOURCE_REF: ${{ github.ref }}
           SOURCE_SHA: ${{ github.sha }}
@@ -107,7 +104,7 @@ jobs:
           printf 'image_tag=%s\nimage_id=%s\n' "$image_tag" "$image_id" >> "$GITHUB_OUTPUT"
   verify-published:
     needs: image
-    if: github.event_name != 'pull_request' && needs.image.outputs.image_tag != ''
+    if: needs.image.outputs.image_tag != ''
     timeout-minutes: 10
     runs-on: ubuntu-22.04
     permissions: {}

@@ -3,8 +3,8 @@
 The Docker `tests` stage uses the runtime dependency lock and runs
 the application suite. The final image copies a success marker from this stage,
 so building the final image requires tests of its exact runtime and wheel to pass.
-CI also exercises the launch wrappers on Linux, macOS and
-Windows with a Docker CLI stub, without requiring a local daemon for those tests.
+The manually triggered image workflow also exercises the launch wrappers on
+Linux, macOS and Windows with a Docker CLI stub, without requiring a local daemon for those tests.
 The Confido client has its own Rust/Python tests; live admission is separate.
 
 `docker build --platform linux/amd64 --target tests .` uses the latest compatible

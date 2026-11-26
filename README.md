@@ -156,10 +156,11 @@ Exercise match, mismatch, restart recovery and logoff using the
 exercise application boundaries; live identity and service compatibility require
 that separate browser-driven check.
 
-The image workflow tests launchers on Linux, macOS and Windows, builds and tests
-the Linux image, checks packaged identity recovery, and publishes the checked
-image on push. A separate job pulls the full-commit tag anonymously, checks
-that it matches the tested image, and verifies its installed runtime.
+The manually triggered image workflow tests launchers on Linux, macOS and
+Windows, builds and tests the Linux image, checks packaged identity recovery,
+and publishes the checked image. A separate job pulls the full-commit tag
+anonymously, checks that it matches the tested image, and verifies its installed
+runtime.
 The default branch supplies `latest`. Branch tags use the `branch-` prefix;
 commit tags use `sha-` followed by the full commit SHA. Publication requires
 successful CI and registry access. Public pulls require a public GHCR package.
