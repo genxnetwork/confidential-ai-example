@@ -158,8 +158,11 @@ that separate browser-driven check.
 
 The image workflow tests launchers on Linux, macOS and Windows, builds and tests
 the Linux image, checks packaged identity recovery, and publishes the checked
-image on push. The default branch supplies `latest`; other branches receive
-branch and commit tags. Publication requires successful CI and registry access.
+image on push. A separate job pulls the full-commit tag anonymously, checks
+that it matches the tested image, and verifies its installed runtime.
+The default branch supplies `latest`. Branch tags use the `branch-` prefix;
+commit tags use `sha-` followed by the full commit SHA. Publication requires
+successful CI and registry access. Public pulls require a public GHCR package.
 
 The [application guide](demo/README.md), [policy catalog](profiles/README.md), and
 [schema catalog](schemas/README.md) describe the maintained client interfaces.

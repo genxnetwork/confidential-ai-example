@@ -5,43 +5,51 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# Serialize publication for a ref; superseded PR checks can be cancelled.
+concurrency:
+  group: demo-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   launchers:
+    timeout-minutes: 10
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-15, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
       - run: python -m unittest discover -s tests -p test_run.py -v
   image:
     needs: launchers
+    timeout-minutes: 30
     runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_tag: ${{ steps.publish.outputs.image_tag }}
+      image_id: ${{ steps.publish.outputs.image_id }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=sha
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        if: github.event_name != 'pull_request'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            type=ref,event=branch,prefix=branch-
+            type=sha,format=long
       - name: Build and test the image once
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
@@ -52,14 +60,72 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
       - name: Check packaged identity across container restarts
         run: python3 scripts/msal_image_checks.py --image confidential-ai-example:ci
-      - name: Publish the checked image
+      - name: Check publication ref
+        id: release
         if: github.event_name != 'pull_request'
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          if [[ "$SOURCE_REF" == refs/heads/* ]]; then
+            remote_ref=$(git ls-remote --exit-code origin "$SOURCE_REF")
+            current_sha=${remote_ref%%$'\t'*}
+            if [[ "$current_sha" != "$SOURCE_SHA" ]]; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Publication skipped: the branch has a newer commit."
+              exit 0
+            fi
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: steps.release.outputs.publish == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the checked image
+        id: publish
+        if: steps.release.outputs.publish == 'true'
         env:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         shell: bash
         run: |
+          image_tag=
+          while IFS= read -r tag; do
+            if [[ "$tag" == *":sha-$GITHUB_SHA" ]]; then
+              image_tag=$tag
+            fi
+          done <<< "$IMAGE_TAGS"
+          [ -n "$image_tag" ] || { echo "Missing full-commit image tag" >&2; exit 1; }
+          image_id=$(docker image inspect --format '{{.Id}}' confidential-ai-example:ci)
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
             docker tag confidential-ai-example:ci "$tag"
             docker push "$tag"
           done <<< "$IMAGE_TAGS"
+          printf 'image_tag=%s\nimage_id=%s\n' "$image_tag" "$image_id" >> "$GITHUB_OUTPUT"
+  verify-published:
+    needs: image
+    if: github.event_name != 'pull_request' && needs.image.outputs.image_tag != ''
+    timeout-minutes: 10
+    runs-on: ubuntu-22.04
+    permissions: {}
+    env:
+      IMAGE_TAG: ${{ needs.image.outputs.image_tag }}
+      EXPECTED_IMAGE_ID: ${{ needs.image.outputs.image_id }}
+    steps:
+      # No registry login: the user launcher requires anonymous pull access.
+      - name: Pull and check the published image anonymously
+        shell: bash
+        run: |
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          docker pull --platform linux/amd64 "$IMAGE_TAG"
+          actual_image_id=$(docker image inspect --format '{{.Id}}' "$IMAGE_TAG")
+          if [[ "$actual_image_id" != "$EXPECTED_IMAGE_ID" ]]; then
+            echo "Published image differs from the checked image" >&2
+            exit 1
+          fi
+          docker run --rm --platform linux/amd64 --network none "$IMAGE_TAG" python3 -m demo.runtime
