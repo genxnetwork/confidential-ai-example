@@ -28,9 +28,9 @@ from demo.transport import ChatTransport
 POLICY_DIR = Path(
     os.environ.get("CONFIDO_POLICY_DIR", Path(__file__).with_name("profiles"))
 )
-CHAT_MODEL = "tinyllama-1.1b-chat-v1.0"
-CHAT_MAX_TOKENS = 16
-SYSTEM_PROMPT = "You are a helpful assistant. Answer in one short sentence."
+CHAT_MODEL = "llama-default"
+CHAT_MAX_TOKENS = 256
+SYSTEM_PROMPT = "You are a helpful assistant. Keep answers concise."
 
 
 def safe_error_message(error):
@@ -215,8 +215,8 @@ def setup_client(endpoint, auth, *, runtime=None):
     )
     show_result(result, admitted=True)
     print(
-        "Inference: TinyLlama runs on the TEE VM; its model and runtime are "
-        "outside the measured IMA reference."
+        "Inference: Llama runs in Azure AI Foundry via Flint; the VM's "
+        "attestation does not cover the Azure model, runtime or output."
     )
     return client
 
@@ -250,7 +250,7 @@ def chat_loop(client):
         conversation.append({"role": "user", "content": user_input})
 
         try:
-            print("\nGenerating a short response...", flush=True)
+            print("\nGenerating a response...", flush=True)
             completion = client.chat.completions.create(
                 model=CHAT_MODEL, messages=conversation, max_tokens=CHAT_MAX_TOKENS
             )
@@ -258,7 +258,7 @@ def chat_loop(client):
             assistant_response = completion.choices[0].message.content
             print("\nAssistant:", assistant_response)
             if completion.choices[0].finish_reason == "length":
-                print("Reply reached this CPU demo's short-response limit.")
+                print(f"Reply reached the demo's {CHAT_MAX_TOKENS}-token response limit.")
 
             conversation.append({"role": "assistant", "content": assistant_response})
 

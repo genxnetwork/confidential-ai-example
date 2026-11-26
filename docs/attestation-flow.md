@@ -1,9 +1,12 @@
 # Attestation and admission flow
 
-Chat uses Flint's `tinyllama-1.1b-chat-v1.0` alias. Flint runs TinyLlama locally
-on the GENXT VM behind the appraised HTTPS endpoint. The client does not download
-or execute model weights. The [Flint deployment](https://github.com/genxnetwork/flint)
-pins model conversion and the server runtime image.
+Chat uses Flint's `llama-default` alias. Flint forwards requests from the
+appraised GENXT HTTPS endpoint to the `llama-chat-primary` Llama deployment in
+Azure AI Foundry, using a separate Azure resource key stored on the gateway.
+The client does not receive that key or download or execute model weights.
+The [Flint deployment](https://github.com/genxnetwork/flint) owns backend routing
+and credentials. Replies are buffered and capped at 256 generated tokens within
+the Confido transport's 30-second request budget.
 
 The [Genoa stage guide](genoa-stage-reference.md) explains reference
 enrollment and earlier isolated acceptance with a synthetic downstream.
@@ -105,8 +108,8 @@ only the latter contains `application_admitted`.
 
 The quote binds nonce, certificate and IMA log. There is no TLS session binder or
 relay-resistance claim. Coverage is enrolled boot aggregate/kernel modules;
-application/model/GPU state, including the local TinyLlama weights and runtime,
-are outside that coverage. Local inference does not attest the model or output.
+application/model/GPU state are outside that coverage. Inference runs in Azure;
+the VM's attestation does not attest the Azure model, runtime or output.
 The browser extension in the Confido repository performs evidence checks entirely
 in WASM and does not use this transport or send chat prompts.
 

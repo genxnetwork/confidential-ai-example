@@ -326,7 +326,8 @@ class AdmissionTests(unittest.TestCase):
             with patch("builtins.input", side_effect=["how are you?", "quit"]), contextlib.redirect_stdout(output):
                 demo.chat_loop(client)
         self.assertEqual(len(requests), 1)
-        self.assertEqual(requests[0]["max_tokens"], 16)
+        self.assertEqual(requests[0]["model"], "llama-default")
+        self.assertEqual(requests[0]["max_tokens"], 256)
         self.assertIn("Generating", output.getvalue())
         self.assertIn("Connection failed or timed out", output.getvalue())
         self.assertNotIn("RuntimeError", output.getvalue())

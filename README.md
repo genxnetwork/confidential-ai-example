@@ -102,13 +102,17 @@ fresh evidence against its local policy, authenticates the quote-bound HTTPS
 peer, then creates an OpenAI client using Confido's transport. Only the admitted
 `/v1/models` and `/v1/chat/completions` routes receive the user's access token.
 A mismatch or failed peer check withholds chat. Flint serves the
-`tinyllama-1.1b-chat-v1.0` model alias on the VM; no model weights run on the client.
+`llama-default` model alias, routed to the `llama-chat-primary` deployment in
+Azure AI Foundry. Flint uses a separate Azure resource key stored server-side;
+the client sends only its Entra access token to Flint. No model weights run on
+the client.
 
-TinyLlama runs on the TEE VM using CPU inference. Demo replies are capped at
-16 generated tokens and use a one-sentence prompt to fit the current Confido
-transport's 30-second request budget. The console shows when generation starts;
-responses are buffered, not streamed. Long prompts or a busy VM can still time
-out. A transport failure does not trigger an automatic inference retry.
+Llama inference runs in Azure, outside the appraised VM. Demo replies are capped
+at 256 generated tokens and use a concise-answer prompt. The current Confido
+transport has a 30-second request budget. The console shows when generation
+starts; responses are buffered, not streamed. Long prompts or slow generation
+can still time out. A transport failure does not trigger an automatic inference
+retry.
 
 The stage policies cover enrolled boot aggregate and kernel modules. They do
 not measure application/model/GPU integrity, attest inference output, or provide
