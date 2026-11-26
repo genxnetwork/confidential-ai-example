@@ -1,8 +1,10 @@
-# Confidential AI example
+# Trustworthy AI – Verifiable and Confidential
+
+*Prototype Demo*
 
 A console demo that verifies attestation evidence and authenticates the HTTPS
 peer before sending a chat request. The application selects a local policy,
-uses [JAN Confido](https://github.com/jandigitrust/confido) for evidence and peer
+uses [Confido](https://github.com/jandigitrust/confido) for evidence and peer
 checks, and makes its own admission decision.
 
 The supplied Genoa stage policies cover the VM's enrolled boot aggregate and
@@ -24,19 +26,28 @@ port 8765 must be available for browser sign-in.
 Linux / macOS:
 
 ```sh
-./run
+docker build --platform linux/amd64 -t confidential-ai-example:local .
+CONFIDO_IMAGE=confidential-ai-example:local ./run
 ```
 
-Windows PowerShell or Command Prompt:
+Windows PowerShell:
 
 ```powershell
+docker build --platform linux/amd64 -t confidential-ai-example:local .
+$env:CONFIDO_IMAGE = "confidential-ai-example:local"
 .\run.cmd
 ```
 
+Run these commands from the repository root. The build uses the selected
+checkout and runs the application tests before producing the local image.
+Rebuild that image after updating the source.
+
 The launcher uses the selected local image if present, otherwise pulls it.
-The default image is `ghcr.io/genxnetwork/confidential-ai-example:latest`.
-To run a local build or another published tag, set `CONFIDO_IMAGE` as described
-below. Registry pulls require that the selected tag exists and is accessible.
+`CONFIDO_IMAGE` can also select an accessible published tag. Without that
+setting, the launcher requests
+`ghcr.io/genxnetwork/confidential-ai-example:latest`; that tag is the publication
+target for the default branch. Registry pulls require that the selected tag
+exists and is accessible.
 
 1. Sign in through Teraveri Identity. The launcher opens the host browser when
    sign-in is needed; the console provides a link if automatic opening fails.
@@ -112,7 +123,7 @@ without producing the final image. Rebuild a local image to incorporate source
 changes; ordinary launches reuse the selected image.
 
 Image builds select the latest successful main-branch `Client wheel` push build
-from JAN Confido, check the downloaded archive SHA-256 against GitHub metadata,
+from Confido, check the downloaded archive SHA-256 against GitHub metadata,
 and validate the wheel against [`confido-client-wheel.json`](confido-client-wheel.json).
 Missing, expired or incompatible artifacts stop the build. Startup checks the
 installed client APIs, Python 3.15 and verifier pipeline 2 without installing
