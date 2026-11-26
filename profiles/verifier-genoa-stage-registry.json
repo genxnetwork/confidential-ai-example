@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "profile": "azure-snp-vtpm-ima/1",
+  "platform": {
+    "product": "Genoa",
+    "ark_sha256": "4c6598d19c18719c5dfd4a7d335f674e5bfe1d8f800cea2cf270c10d103db2f1",
+    "minimum_tcb": [
+      12,
+      0,
+      28,
+      88
+    ],
+    "launch_measurement": "6587d41e46995d71808f7d92d859e0ed093bea3c55a342c866a20cd1a213ae4e20241bdbc44d5255222da65cce1c7f48"
+  },
+  "reference": {
+    "repository": "teraveri/reference-value-registry",
+    "commit": "3fa7913d44a377806bd94126589be1feb362b6cb",
+    "path": "entries/azure-snp-vtpm-ima-1/azure-genoa-ubuntu2204-kernel-1071-stage/reference.json",
+    "sha256": "31d1655c424507116f1f39adbbab5d02b35524756fb7c95eb5fce4ca7672086b"
+  }
+}

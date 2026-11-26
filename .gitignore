@@ -164,3 +164,24 @@ cython_debug/
 # Keys
 *.pem
 
+
+# Local application credentials
+.credentials.json
+build/
+build-manifest.json
+
+__pycache__/
+
+# Local agent/tool output and private runtime archives
+.ruff_cache/
+.artifacts/
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Explicit local candidate for image builds
+.image-wheel/

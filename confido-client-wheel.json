@@ -1,0 +1,12 @@
+{
+  "distribution": "confido-client",
+  "version": "0.2.1a1",
+  "github": {
+    "repository": "jandigitrust/confido",
+    "workflow": "client-wheel.yml",
+    "branch": "main",
+    "artifacts": {
+      "linux-x86_64-cp315": "client-wheel-ubuntu-22.04-py3.15"
+    }
+  }
+}

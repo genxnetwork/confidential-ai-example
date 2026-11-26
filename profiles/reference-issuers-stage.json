@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "registry_repository": "teraveri/reference-value-registry",
+  "issuers": [
+    {
+      "name": "GENXT",
+      "repository": "genxnetwork/confido-trusted-repository",
+      "workflow": "genxnetwork/confido-trusted-repository/.github/workflows/endorse-manifest.yml",
+      "source_ref": "refs/heads/master",
+      "predicate_type": "https://teraveri.org/attestations/reference-manifest-publisher/v1",
+      "claim": "published-reference-manifest",
+      "profiles": ["azure-snp-vtpm-ima/1"],
+      "review_statuses": ["stage-candidate", "stage-approved"]
+    },
+    {
+      "name": "GENXT-manual",
+      "publisher": "GENXT",
+      "repository": "genxnetwork/confido-trusted-repository",
+      "method": "ed25519-stage",
+      "public_key": "IxESlXZP7rLLmFHOptoTiI6IuRuhBcXruYvAu/zBcqg=",
+      "public_key_sha256": "4c7a056d1ab50c7c26879dc9255e7a323eb48e3cc22b5f2152eb6dbc39917df9",
+      "manifest_path": "entries/azure-snp-vtpm-ima-1/azure-genoa-ubuntu2204-kernel-1071-stage/manifest.json",
+      "manifest_sha256": "9e894415cd892a01a99b679cbac311ea6ba8648fc010c0bf5ffe854d735234e0",
+      "predicate_type": "https://teraveri.org/attestations/reference-manifest-publisher/v1",
+      "claim": "published-reference-manifest",
+      "profiles": ["azure-snp-vtpm-ima/1"],
+      "review_statuses": ["stage-candidate"]
+    }
+  ]
+}

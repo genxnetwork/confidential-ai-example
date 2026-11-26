@@ -1,0 +1,6 @@
+{
+  "product": "Genoa",
+  "ark_sha256": "4c6598d19c18719c5dfd4a7d335f674e5bfe1d8f800cea2cf270c10d103db2f1",
+  "minimum_tcb": [12, 0, 28, 88],
+  "launch_measurement": "6587d41e46995d71808f7d92d859e0ed093bea3c55a342c866a20cd1a213ae4e20241bdbc44d5255222da65cce1c7f48"
+}

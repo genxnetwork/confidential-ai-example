@@ -1,0 +1,6 @@
+{
+  "schema_version": 2,
+  "origin": "https://mismatch.demo.genxt.network",
+  "verifier_policy": "verifier-mismatch.json",
+  "allow_untrusted_bootstrap": true
+}

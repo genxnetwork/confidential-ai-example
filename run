@@ -1,0 +1,92 @@
+#!/bin/sh
+# Run the published Linux image with private persistent state and a local callback.
+set -eu
+case "$#:${1-}" in
+    0:|1:--setup|1:--info|1:--update) ;;
+    1:--help|1:-h)
+        printf '%s\n' 'Usage: ./run [--setup | --info | --update]' \
+            'Requires Docker running with Linux containers.' \
+            'First run downloads the demo image. --update refreshes it explicitly.'
+        exit 0 ;;
+    *) printf '%s\n' 'Usage: ./run [--setup | --info | --update]' >&2; exit 2 ;;
+esac
+if ! command -v docker >/dev/null 2>&1; then
+    printf '%s\n' 'Install Docker and start its Linux container engine, then run ./run again.' >&2
+    exit 1
+fi
+if ! engine=$(docker info --format '{{.OSType}}' 2>/dev/null); then
+    printf '%s\n' 'Docker is unavailable. Start Docker and check your access to its daemon.' >&2
+    exit 1
+fi
+if [ "$engine" != linux ]; then
+    printf '%s\n' 'Switch Docker to Linux containers, then run ./run again.' >&2
+    exit 1
+fi
+image=${GENXT_DEMO_IMAGE:-ghcr.io/genxnetwork/confidential-ai-example:latest}
+if [ "${1-}" = --update ] || ! docker image inspect "$image" >/dev/null 2>&1; then
+    docker pull --platform linux/amd64 "$image"
+fi
+case "${1-}" in
+    --setup) printf '%s\n' 'Ready. Start the demo with ./run'; exit 0 ;;
+    --info|--update)
+        exec docker run --rm --platform linux/amd64 --network none "$image" python3 -m demo.runtime ;;
+esac
+volume=${GENXT_DEMO_STATE_VOLUME:-confidential-ai-example-state}
+case "$volume" in ''|*[!a-zA-Z0-9_.-]*|[!a-zA-Z0-9]*) printf '%s\n' 'Invalid Docker state volume name.' >&2; exit 2 ;; esac
+set -- run --rm --platform linux/amd64 --interactive
+if [ -t 0 ] && [ -t 1 ]; then set -- "$@" --tty; fi
+set -- "$@" --publish 127.0.0.1:8765:8765 \
+    --mount "type=volume,source=$volume,target=/state" \
+    --env "CONFIDO_COLOR=${CONFIDO_COLOR:-auto}"
+if [ -n "${GENXT_DEMO_POLICY_DIR:-}" ]; then
+    policies=$(CDPATH= cd "$GENXT_DEMO_POLICY_DIR" && pwd)
+    set -- "$@" --mount "type=bind,source=$policies,target=/policies,readonly" \
+        --env GENXT_DEMO_POLICY_DIR=/policies
+fi
+case "${GENXT_DEMO_BROWSER-auto}" in
+    auto|manual) ;;
+    *) printf '%s\n' 'GENXT_DEMO_BROWSER must be auto or manual.' >&2; exit 2 ;;
+esac
+opener=
+if [ "${GENXT_DEMO_BROWSER-auto}" = auto ] && command -v curl >/dev/null 2>&1; then
+    case "$(uname -s)" in
+        Darwin) if command -v open >/dev/null 2>&1; then opener=open; fi ;;
+        Linux) if command -v xdg-open >/dev/null 2>&1; then opener=xdg-open; fi ;;
+    esac
+fi
+if [ -z "$opener" ]; then exec docker "$@" "$image"; fi
+
+# A per-launch path prevents a listener left by another run from opening a login.
+# The launcher opens only a local URL; MSAL constructs the OAuth URL in the image.
+if ! handoff_dir=$(mktemp -d "${TMPDIR:-/tmp}/confido-browser.XXXXXXXXXX"); then
+    exec docker "$@" "$image"
+fi
+handoff=${handoff_dir##*/}
+browser_pid=
+launcher_pid=$$
+cleanup_browser() {
+    if [ -n "$browser_pid" ]; then
+        kill "$browser_pid" 2>/dev/null || true
+        wait "$browser_pid" 2>/dev/null || true
+    fi
+    rmdir "$handoff_dir" 2>/dev/null || true
+}
+trap cleanup_browser 0
+(
+    browser_url="http://localhost:8765/browser/$handoff"
+    last_flow=
+    while kill -0 "$launcher_pid" 2>/dev/null; do
+        if flow=$(curl --noproxy '*' --connect-timeout 1 --max-time 1 --fail --silent \
+            "$browser_url/ready"); then
+            if [ -n "$flow" ] && [ "$flow" != "$last_flow" ]; then
+                "$opener" "$browser_url" || exit
+                last_flow=$flow
+            fi
+        fi
+        sleep 1
+    done
+) >/dev/null 2>&1 &
+browser_pid=$!
+status=0
+docker "$@" --env "GENXT_DEMO_BROWSER_HANDOFF=$handoff" "$image" || status=$?
+exit "$status"

@@ -1,0 +1,6 @@
+{
+  "schema_version": 2,
+  "origin": "https://match.demo.genxt.network",
+  "verifier_policy": "verifier-match.json",
+  "allow_untrusted_bootstrap": true
+}

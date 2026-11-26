@@ -1,22 +1,11 @@
-.PHONY: all
-all: build run
-
-ARGS = $(filter-out $@,$(MAKECMDGOALS))
-
+DOCKER ?= docker
+IMAGE ?= confidential-ai-example:local
+GENXT_DEMO_CLIENT_WHEEL ?=
+VENV ?= .venv
+.PHONY: build test
 build:
-	docker build --platform=linux/amd64 -t confidential-ai-example .
-
-rebuild:
-	docker build --platform=linux/amd64 --no-cache -t confidential-ai-example .
-
-clean:
-	docker rmi confidential-ai-example --force
-
-cli:
-	docker run --platform linux/amd64 --hostname genxt-confidential-ai -it confidential-ai-example /bin/bash
-
-chat:
-	docker run --platform linux/amd64 -it confidential-ai-example python3 confai-promter.py
-
-%:
-	@true
+	install -d .image-wheel
+	$(if $(GENXT_DEMO_CLIENT_WHEEL),cp "$(GENXT_DEMO_CLIENT_WHEEL)" ".image-wheel/$(notdir $(GENXT_DEMO_CLIENT_WHEEL))",@true)
+	$(DOCKER) build --platform linux/amd64 --build-arg "GENXT_DEMO_CLIENT_WHEEL=$(if $(GENXT_DEMO_CLIENT_WHEEL),.image-wheel/$(notdir $(GENXT_DEMO_CLIENT_WHEEL)),)" -t "$(IMAGE)" .
+test:
+	$(VENV)/bin/python -m unittest discover -s tests -v
