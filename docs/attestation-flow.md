@@ -1,15 +1,13 @@
 # Attestation and admission flow
 
-Chat uses Flint's `llama-default` alias. Flint forwards requests from the
-appraised GENXT HTTPS endpoint to the `llama-chat-primary` Llama deployment in
-Azure AI Foundry, using a separate Azure resource key stored on the gateway.
-The client does not receive that key or download or execute model weights.
-The [Flint deployment](https://github.com/genxnetwork/flint) owns backend routing
-and credentials. Replies are buffered and capped at 256 generated tokens within
-the Confido transport's 30-second request budget.
+Chat uses a preconfigured OpenAI-compatible service after evidence and HTTPS
+peer checks. The [root README](../README.md) identifies the current model alias
+and planned model update. Replies are buffered and capped at 256 generated
+tokens within the Confido transport's 30-second request budget. Inference runs
+outside the appraised VM and is outside its attestation coverage.
 
-The [Genoa stage guide](genoa-stage-reference.md) explains reference
-enrollment and earlier isolated acceptance with a synthetic downstream.
+The [policy catalog](../profiles/README.md) identifies the enrolled references,
+their stage status, and the deliberately mismatched fixture.
 
 At startup, before endpoint selection, the console signs in once through Teraveri
 Identity using MSAL Python's Authorization Code flow with PKCE. A saved session shows the identity
@@ -59,12 +57,10 @@ Fatal startup errors return a nonzero exit status. Request errors show a safe
 classification or HTTP status without printing server error bodies or tokens.
 
 `POST /tee-report` requires no application login.
-After evidence and TLS-peer checks, the scoped transport sends it only to the
-appraised `/v1/models` and `/v1/chat/completions` routes. Flint validates the
-token at its HTTPS gateway and supplies its separate backend key server-side.
-The client never reads an application password or backend API key. Other gateway
-routes keep their existing access rules. Host port 8765 must be available. Docker maps only `127.0.0.1:8765` to the
-callback listener inside the container.
+After evidence and TLS-peer checks, the scoped transport sends the user's access
+token only to the appraised `/v1/models` and `/v1/chat/completions` routes. The service validates the
+user's access token. Host port 8765 must be available. Docker maps only
+`127.0.0.1:8765` to the callback listener inside the container.
 The isolated acceptance uses a synthetic downstream.
 Decline, sign-in failure, collection failure, mismatched evidence and peer failure
 withhold the chat request. A mismatch sends no user access token to the demo VM.
@@ -83,8 +79,8 @@ Application profiles contain a locally approved HTTPS origin and a
 Verifier policies contain the independently enrolled root, platform and reference.
 Match/mismatch use the same verifier code path with different local reference pins.
 This repository owns these demo policies. The Genoa stage enrollment inputs and
-positive/negative policies also live under `profiles/`; the separate `../sanctio/enroll_reference.py`
-checks the GENXT publisher statement before emitting a pinned positive policy.
+positive/negative policies live under `profiles/`. The positive policy was
+generated after checking the GENXT publisher statement at enrollment.
 The positive reference is a stage candidate in the
 [Teraveri registry](https://github.com/teraveri/reference-value-registry); the
 negative reference is an unendorsed fixture there, not an alternative trusted
@@ -94,8 +90,7 @@ The publisher statement is checked at enrollment, not rechecked on each run.
 Neither a registry update nor a new branch tip changes an existing pin. If the
 pinned file cannot be retrieved, the application withholds chat.
 The browser extension's approved demo origins are in
-[`profiles/extension-origins.json`](../profiles/extension-origins.json). The GENXT
-Nginx routing is maintained by [Flint](https://github.com/genxnetwork/flint).
+[`profiles/extension-origins.json`](../profiles/extension-origins.json).
 The generic verifier accepts policy bytes supplied by its caller and does not
 choose these trust pins.
 The Confido client sends a nonce directly to `POST /tee-report`; no metadata discovery
@@ -108,8 +103,8 @@ only the latter contains `application_admitted`.
 
 The quote binds nonce, certificate and IMA log. There is no TLS session binder or
 relay-resistance claim. Coverage is enrolled boot aggregate/kernel modules;
-application/model/GPU state are outside that coverage. Inference runs in Azure;
-the VM's attestation does not attest the Azure model, runtime or output.
+application/model/GPU state are outside that coverage. The VM's attestation
+does not attest the external model, runtime or inference output.
 The browser extension in the Confido repository performs evidence checks entirely
 in WASM and does not use this transport or send chat prompts.
 
@@ -123,7 +118,6 @@ startup does not invoke pip, download a wheel, hash application sources or requi
 build artifacts. Each run records the installed client's build metadata separately
 from its application decision. `./run --info` can also show the optional installation
 record; deleting that record does not disable a compatible installed client.
-The [runtime review](runtime-and-wheel-review.md) explains this simplification.
 
 Caller collection events have real UTC timestamps; completed verifier stages are
 printed in their returned order without invented per-stage timestamps. All IMA
@@ -137,3 +131,21 @@ The final summary separates evidence verification from application admission.
 The 120-second monotonic challenge deadline is checked again after rendering and
 the pinned TLS peer check. A live run is one-use; loading an old archive cannot
 restore it. An expired run or a failed TLS peer never opens chat.
+
+## Reviewer checks
+
+Use the launch and local-build commands in the [root README](../README.md),
+with a dedicated state volume when testing sign-in and logoff.
+
+1. Select match, allow collection and require verified evidence and an
+   authenticated HTTPS peer before the application sends a chat request.
+2. Select mismatch and require denial with no chat request or user token sent.
+3. Decline collection and require that chat remains closed.
+4. Restart with the same state volume and check saved-session reuse. Exercise
+   local logoff and a fresh browser sign-in separately.
+5. Read the policy catalog and measurement limits above. A successful chat
+   demonstrates application admission; it does not attest inference.
+
+The automated suite uses controlled identity, evidence and peer collaborators
+for these boundaries. A local test pass does not establish live browser sign-in,
+public deployment state or registry publication.

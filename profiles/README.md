@@ -41,7 +41,12 @@ use SemVer prerelease spelling while Python uses PEP 440. Runtime compatibility
 also requires verifier pipeline revision 2. Wire and schema versions remain
 separate contracts.
 
-See [Genoa stage enrollment](../docs/genoa-stage-reference.md) for the pinned
-registry commit, enrollment command, and isolated match/mismatch run. A new
-image, kernel, or issuer approval requires a reviewed policy update and fresh
+The positive Genoa policy pins Teraveri registry commit
+`3fa7913d44a377806bd94126589be1feb362b6cb`; the negative policy pins the
+unendorsed fixture at `8462ca8808d85395397d847fae6446d380a1320c`.
+The accepted `GENXT-manual` key and manifest are explicit local decisions in
+`reference-issuers-stage.json`. Publisher verification happens at enrollment;
+live runs retrieve the pinned reference and check its digest and measurements.
+
+A new image, kernel, or issuer approval requires a reviewed policy update and fresh
 acceptance; editing a reference to force a pass is not an approval process.

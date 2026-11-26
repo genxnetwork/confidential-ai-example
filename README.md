@@ -17,8 +17,6 @@ The installed [JAN Confido](https://github.com/jandigitrust/confido) client whee
 retrieves the report and pinned reference, appraises evidence, and authenticates
 the HTTPS peer. `demo/admission.py` applies the application's policy before chat;
 `demo/transport.py` limits where the user's access token can be sent.
-[Attestor](https://github.com/jandigitrust/attestor) provides native evidence
-collection and `POST /tee-report` on the demo VM.
 The component guides cover [`demo/`](demo/README.md),
 [`scripts/`](scripts/README.md), and [`tests/`](tests/README.md).
 
@@ -64,10 +62,9 @@ This repository's image workflow builds one image, runs the application suite
 and packaged session-recovery checks, then publishes that same image to GHCR.
 The default branch supplies `latest`; other pushed branches receive their own
 image tags and commit tags. The image package must be made public after its
-first publication for anonymous pulls. These local changes are not yet published.
-The compatible upstream alpha wheel is available; the
-[dated readiness record](docs/release-readiness-20261125.md) identifies the
-wheel and locally tested image, completed checks and remaining live acceptance.
+first publication for anonymous pulls. A successful local build does not
+establish registry publication or anonymous pull access. Use `./run --info`
+with the selected image to inspect its installed wheel and build information.
 
 Inside the image build, the GitHub API selects the latest successful main-branch
 `Client wheel` push build from [JAN Confido](https://github.com/jandigitrust/confido).
@@ -80,8 +77,7 @@ A running image needs neither a retained wheel nor that optional record.
 There is one image target: `linux/amd64`, including on Windows and Apple Silicon.
 Docker Desktop supplies the required Linux environment and architecture
 emulation on ARM Macs. Package locks therefore contain one exact wheel hash per
-version for CPython 3.15 / Linux x86_64. Enrollment and its cryptography dependencies live in the separate
-`../sanctio/` project; neither image stage installs them.
+version for CPython 3.15 / Linux x86_64.
 
 Overrides are optional: `CONFIDO_IMAGE` selects an image/tag,
 `CONFIDO_STATE_VOLUME` selects a separate named volume, and `CONFIDO_POLICY_DIR`
@@ -101,13 +97,15 @@ For each selected endpoint, the application asks Confido to collect and appraise
 fresh evidence against its local policy, authenticates the quote-bound HTTPS
 peer, then creates an OpenAI client using Confido's transport. Only the admitted
 `/v1/models` and `/v1/chat/completions` routes receive the user's access token.
-A mismatch or failed peer check withholds chat. Flint serves the
-`llama-default` model alias, routed to the `llama-chat-primary` deployment in
-Azure AI Foundry. Flint uses a separate Azure resource key stored server-side;
-the client sends only its Entra access token to Flint. No model weights run on
-the client.
+A mismatch or failed peer check withholds chat. The client uses a preconfigured
+OpenAI-compatible service and sends its Entra access token only after admission.
 
-Llama inference runs in Azure, outside the appraised VM. Demo replies are capped
+The selected replacement model is
+[DeepSeek V4.1 Flash 1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017),
+with MIT-licensed code and weights. The model update is pending: the current
+endpoint still serves Llama through the client's `llama-default` alias.
+
+Inference runs outside the appraised VM. Demo replies are capped
 at 256 generated tokens and use a concise-answer prompt. The current Confido
 transport has a 30-second request budget. The console shows when generation
 starts; responses are buffered, not streamed. Long prompts or slow generation
@@ -125,8 +123,8 @@ TLS session binding and relay resistance. Verification archives and separate
 application decisions remain private in the state volume.
 
 See [the detailed flow](docs/attestation-flow.md) for trust boundaries, identity,
-reference pins, saved records and console output; [the policy catalog](profiles/README.md)
-for fixture scope; and [operator tooling](tools/README.md) for enrollment.
+reference pins, saved records and console output; and
+[the policy catalog](profiles/README.md) for fixture scope.
 
 ## Identity implementation and session recovery
 
@@ -157,7 +155,7 @@ for tokens over HTTPS. The landing page clears the query from browser history,
 does not reflect the code, and disables referrer forwarding and caching.
 Docker publishes it on host loopback only. Sign-in and restored sessions still
 require the application's evidence appraisal and HTTPS peer checks before any
-Flint API token is forwarded.
+API token is forwarded.
 
 The application has no short session timeout. MSAL reuses cached tokens and
 silently renews expired tokens, subject to Entra's session and revocation policy.
@@ -185,8 +183,8 @@ CONFIDO_IMAGE=confidential-ai-example:local CONFIDO_STATE_VOLUME=confidential-ai
 Complete browser sign-in, exit normally, then repeat the same command and continue
 without a browser prompt. Also exercise local logoff and a new sign-in. The host
 browser must reach the Docker host's localhost port 8765; forward that port when
-using a remote Docker host. Live sign-in remains operator-run. The [dated image acceptance](docs/msal-image-acceptance-20261125.md)
-records automated results and their limits.
+using a remote Docker host. Live sign-in remains operator-run; synthetic checks
+do not establish live Entra compatibility.
 
 An `unknown` label on Entra's browser account picker is separate from this
 console's identity label. Check the external-tenant user's `displayName` and the
@@ -195,9 +193,8 @@ fields. If the browser retained an old account label, sign out on the provider's
 page and sign in again after correcting the profile. Local demo logoff only
 clears the application's token cache. See Microsoft's
 [user profile attributes](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-user-attributes).
-The [automatic naming contract](docs/entra-display-name.md) describes the required
-registration-side change and its pending tenant configuration. Rebuilding the
-demo does not update Entra directory profiles.
+Rebuilding the demo does not update Entra directory profiles or configure
+automatic display-name generation during registration.
 
 ## Developer checks
 
@@ -205,8 +202,6 @@ The user launch path only pulls and runs an image. Image builds belong to develo
 `docker build --platform linux/amd64 -t confidential-ai-example:local .` builds
 the final image and requires the application tests to pass against its exact
 runtime and wheel. `--target tests` runs only through that test stage.
-Enrollment tests run in the
-separate reference client project.
 
 To test an unpublished Linux wheel without a host Python installation:
 

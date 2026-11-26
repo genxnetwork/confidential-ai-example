@@ -12,10 +12,7 @@ These Python helpers run inside image builds or developer environments.
 
 `./run --info` inspects the installed client inside the image. The
 [root README](../README.md) covers launch commands and local image builds;
-the [Genoa stage guide](../docs/genoa-stage-reference.md) covers reference enrollment.
-
-Policy enrollment lives in Sanctio and browser acceptance in Confido. Their
-deployment inputs and invocation guides are linked from [`tools/`](../tools/README.md).
+the [policy catalog](../profiles/README.md) describes the selected Genoa reference pins.
 
 `msal_image_checks.py --image IMAGE` runs opt-in packaged identity checks using
 synthetic CIAM HTTP responses, the real MSAL library, a host-loopback callback
