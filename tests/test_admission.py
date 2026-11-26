@@ -333,6 +333,49 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn("RuntimeError", output.getvalue())
         self.assertNotIn("synthetic-private-native-error", output.getvalue())
 
+    def test_invalid_terminal_bytes_do_not_poison_following_chat(self):
+        requests = []
+
+        def respond(request):
+            requests.append(json.loads(request.content))
+            return httpx.Response(200, json={
+                "id": "test", "object": "chat.completion", "created": 0,
+                "model": "llama-default",
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Здравствуйте!"},
+                    "finish_reason": "stop",
+                }],
+            })
+
+        terminal_bytes = b"private-invalid-\xff\n" + "Привет 👋\nhello\nquit\n".encode("utf-8")
+        with (
+            io.TextIOWrapper(io.BytesIO(terminal_bytes), encoding="utf-8",
+                             errors="surrogateescape") as terminal,
+            demo.openai.OpenAI(
+                api_key="synthetic-token", base_url="https://example.test/v1", max_retries=0,
+                http_client=httpx.Client(transport=demo.ChatTransport(
+                    httpx.MockTransport(respond), "synthetic-token"), trust_env=False),
+            ) as client,
+            patch("sys.stdin", terminal),
+            contextlib.redirect_stdout(io.StringIO()) as output,
+        ):
+            demo.chat_loop(client)
+
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0]["messages"], [
+            {"role": "system", "content": demo.SYSTEM_PROMPT},
+            {"role": "user", "content": "Привет 👋"},
+        ])
+        self.assertEqual(requests[1]["messages"], [
+            *requests[0]["messages"],
+            {"role": "assistant", "content": "Здравствуйте!"},
+            {"role": "user", "content": "hello"},
+        ])
+        self.assertIn("Input is not valid UTF-8", output.getvalue())
+        self.assertNotIn("Operation failed", output.getvalue())
+        self.assertNotIn("private-invalid", output.getvalue())
+
     def test_failed_logoff_returns_safe_failure_without_starting_another_login(self):
         auth = synthetic_session("synthetic-access", float("inf"), "user")
         errors = io.StringIO()

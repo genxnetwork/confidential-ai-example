@@ -247,6 +247,14 @@ def chat_loop(client):
         if not user_input:
             continue
 
+        # stdin may preserve malformed terminal bytes as surrogate escapes.
+        # Reject them before they enter history and break every later JSON request.
+        try:
+            user_input.encode("utf-8")
+        except UnicodeEncodeError:
+            print("Input is not valid UTF-8. Please retype your message; it was not sent.")
+            continue
+
         conversation.append({"role": "user", "content": user_input})
 
         try:

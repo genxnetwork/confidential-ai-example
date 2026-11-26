@@ -114,6 +114,11 @@ starts; responses are buffered, not streamed. Long prompts or slow generation
 can still time out. A transport failure does not trigger an automatic inference
 retry.
 
+Chat accepts UTF-8 text, including Cyrillic and emoji. Malformed terminal input
+is rejected before sending or adding it to conversation history; retype the
+message when prompted. If an older image keeps failing after malformed input,
+type `clear` to discard that conversation before trying again.
+
 The stage policies cover enrolled boot aggregate and kernel modules. They do
 not measure application/model/GPU integrity, attest inference output, or provide
 TLS session binding and relay resistance. Verification archives and separate
